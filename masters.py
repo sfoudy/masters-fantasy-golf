@@ -6,6 +6,7 @@ import pandas as pd
 import unicodedata
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
+from matplotlib.colors import LinearSegmentedColormap
 
 # Initialize Firebase
 if not firebase_admin._apps:
@@ -146,8 +147,17 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
-                        score = str(player.get('score', 'E')).strip()
-                        scores[name] = int(score) if score.replace('E', '0').isdigit() else 0
+                        
+                        # Correct score extraction from API
+                        score = player.get('scoreToPar', player.get('totalToPar', 'E'))
+                        
+                        # Handle different data types
+                        if isinstance(score, str):
+                            score = score.replace("E", "0").strip()
+                        score_val = int(score) if str(score).strip() else 0
+                            
+                        scores[name] = score_val
+                        
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
@@ -165,11 +175,18 @@ def display_leaderboard(leaderboard):
         leaderboard_df.index += 1
         
         try:
-            # Dynamic color range based on actual scores
+            # Create custom color gradient
+            cmap = LinearSegmentedColormap.from_list(
+                'score', 
+                ['#00FF00', '#FFFF00', '#FF0000'],  # Green-Yellow-Red
+                N=256
+            )
+            
+            # Get score range for coloring
             min_score = leaderboard_df['Score'].min()
             max_score = leaderboard_df['Score'].max()
             
-            # Handle case where all scores are equal
+            # Handle uniform scores
             if min_score == max_score:
                 min_score -= 1
                 max_score += 1
@@ -177,14 +194,15 @@ def display_leaderboard(leaderboard):
             styled_df = (
                 leaderboard_df.style
                 .background_gradient(
-                    cmap='RdYlGn_r',
+                    cmap=cmap,
                     subset=["Score"],
                     vmin=min_score,
                     vmax=max_score
                 )
                 .set_properties(**{
-                    'color': 'white',
-                    'border': '1px solid grey'
+                    'color': 'black',
+                    'border': '1px solid #444',
+                    'background-color': '#FFF'
                 }, subset=["Score"])
                 .format({"Score": lambda x: f"{x:+}"})
                 .hide(axis="index")
