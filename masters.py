@@ -70,7 +70,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Updated score calculation using raw strokes and course par
+# Accurate score calculation using raw strokes and course par
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -79,11 +79,11 @@ def get_masters_scores():
         
         scores = {}
         for event in response.get('events', []):
-            # Get course par from API response
-            course_par = 72  # Default if not found
+            # Extract course par from API
+            course_par = 72  # Default value if not found
             try:
                 course_par = int(event['competitions'][0]['course']['par'])
-            except (KeyError, TypeError):
+            except (KeyError, TypeError, ValueError):
                 pass
             
             for competition in event.get('competitions', []):
@@ -92,7 +92,7 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Calculate score relative to par using total strokes
+                        # Calculate score relative to par
                         total_strokes = int(player.get('total', course_par))
                         score = total_strokes - course_par
                         
@@ -129,7 +129,7 @@ def main():
     if "teams" not in st.session_state:
         st.session_state.teams = load_teams(user_id)
 
-    # Load scores with accurate relative-to-par calculation
+    # Load scores with accurate calculations
     live_scores = get_masters_scores() or {
         normalize_name("Scottie Scheffler"): -7,
         normalize_name("Rory McIlroy"): -3
@@ -145,7 +145,7 @@ def main():
         for golfer in golfers:
             normalized = normalize_name(golfer)
             score = live_scores.get(normalized, 0)
-            formatted = f"{score:+}"  # Always show +/- including "+0"
+            formatted = f"{score:+}"  # Always show +/- notation
             formatted_golfers.append(f"{golfer} ({formatted})")
         
         leaderboard.append({
