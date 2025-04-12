@@ -70,7 +70,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Accurate score calculation using raw strokes and course par
+# Fixed score calculation using per-round scores
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -79,24 +79,23 @@ def get_masters_scores():
         
         scores = {}
         for event in response.get('events', []):
-            # Extract course par from API
-            course_par = 72  # Default value if not found
-            try:
-                course_par = int(event['competitions'][0]['course']['par'])
-            except (KeyError, TypeError, ValueError):
-                pass
-            
             for competition in event.get('competitions', []):
                 for player in competition.get('competitors', []):
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Calculate score relative to par
-                        total_strokes = int(player.get('total', course_par))
-                        score = total_strokes - course_par
-                        
-                        scores[name] = score
+                        # Sum scores from all completed rounds
+                        total_score = 0
+                        for round_score in player.get('linescores', []):
+                            value = round_score.get('value', 'E')
+                            if isinstance(value, str):
+                                value = value.replace("E", "0").strip()
+                                total_score += int(value) if value else 0
+                            else:
+                                total_score += int(value)
+                                
+                        scores[name] = total_score
                         
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
@@ -129,7 +128,7 @@ def main():
     if "teams" not in st.session_state:
         st.session_state.teams = load_teams(user_id)
 
-    # Load scores with accurate calculations
+    # Load scores with accurate per-round summation
     live_scores = get_masters_scores() or {
         normalize_name("Scottie Scheffler"): -7,
         normalize_name("Rory McIlroy"): -3
@@ -145,7 +144,7 @@ def main():
         for golfer in golfers:
             normalized = normalize_name(golfer)
             score = live_scores.get(normalized, 0)
-            formatted = f"{score:+}"  # Always show +/- notation
+            formatted = f"{score:+}"  # Show actual scores (-3, +2, etc)
             formatted_golfers.append(f"{golfer} ({formatted})")
         
         leaderboard.append({
