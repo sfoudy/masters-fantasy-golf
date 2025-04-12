@@ -146,19 +146,8 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
-                        
-                        # Correct score extraction method
                         score = str(player.get('score', 'E')).strip()
-                        if score == 'E':
-                            score_val = 0
-                        else:
-                            try:
-                                score_val = int(score)
-                            except ValueError:
-                                score_val = 0
-                                
-                        scores[name] = score_val
-                        
+                        scores[name] = int(score) if score.replace('E', '0').isdigit() else 0
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
@@ -225,21 +214,24 @@ def main():
         leaderboard_df.index += 1
         
         try:
-            # Enhanced styling
+            # Position-based coloring
+            leaderboard_df['Rank'] = leaderboard_df.index
             styled_df = (
                 leaderboard_df.style
                 .background_gradient(
                     cmap='RdYlGn_r',
-                    subset=["Score"],
-                    vmin=-20,
-                    vmax=20
+                    subset=["Rank"],
+                    vmin=1,
+                    vmax=len(leaderboard_df)
                 )
                 .set_properties(**{
                     'color': 'white',
-                    'border': '1px solid grey'
+                    'border': '1px solid grey',
+                    'background-color': 'black'
                 }, subset=["Score"])
                 .format({"Score": lambda x: f"{x:+}"})
                 .hide(axis="index")
+                .hide(columns=["Rank"])
             )
             st.dataframe(styled_df, use_container_width=True)
         except Exception as e:
