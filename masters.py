@@ -133,7 +133,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Verified score extraction
+# Score extraction
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -147,19 +147,8 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
-                        
-                        # Correct score extraction from working version
                         score = str(player.get('score', 'E')).strip()
-                        if score == 'E':
-                            score_val = 0
-                        else:
-                            try:
-                                score_val = int(score)
-                            except ValueError:
-                                score_val = 0
-                                
-                        scores[name] = score_val
-                        
+                        scores[name] = int(score) if score.replace('E', '0').isdigit() else 0
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
@@ -270,6 +259,12 @@ def main():
     # Sidebar controls
     with st.sidebar:
         st.header("👥 Manage Teams")
+        
+        # Logout button
+        if st.button("🚪 Log Out"):
+            del st.session_state.user_id
+            st.rerun()
+        
         new_team = st.text_input("Create New Team:")
         if st.button("Add Team") and new_team:
             if new_team.strip() and proper_case(new_team) not in [proper_case(t) for t in st.session_state.teams]:
