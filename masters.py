@@ -97,7 +97,7 @@ def get_user_session():
 
 # Helper functions
 def normalize_name(name: str) -> str:
-    return unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode().lower().strip()
+    return name.strip().lower()
 
 def proper_case(name: str) -> str:
     return ' '.join(word.capitalize() for word in name.split())
@@ -146,8 +146,19 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
+                        
+                        # Correct score extraction method
                         score = str(player.get('score', 'E')).strip()
-                        scores[name] = int(score) if score.replace('E', '0').isdigit() else 0
+                        if score == 'E':
+                            score_val = 0
+                        else:
+                            try:
+                                score_val = int(score)
+                            except ValueError:
+                                score_val = 0
+                                
+                        scores[name] = score_val
+                        
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
@@ -218,7 +229,7 @@ def main():
             styled_df = (
                 leaderboard_df.style
                 .background_gradient(
-                    cmap='RdYlGn_r',  # Reversed Red-Yellow-Green
+                    cmap='RdYlGn_r',
                     subset=["Score"],
                     vmin=-20,
                     vmax=20
