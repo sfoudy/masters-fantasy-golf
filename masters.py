@@ -6,7 +6,6 @@ import pandas as pd
 import unicodedata
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
-from matplotlib.colors import LinearSegmentedColormap
 
 # Initialize Firebase
 if not firebase_admin._apps:
@@ -148,22 +147,27 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Correct score extraction from API
+                        # Get score from correct API field
                         score = player.get('scoreToPar', player.get('totalToPar', 'E'))
                         
-                        # Handle different data types
+                        # Convert to integer with validation
                         if isinstance(score, str):
                             score = score.replace("E", "0").strip()
-                        score_val = int(score) if str(score).strip() else 0
+                        score_val = int(score) if score else 0
                             
                         scores[name] = score_val
+                        st.write(f"Processed {raw_name}: {score_val}")  # Debug output
                         
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
     except Exception as e:
         st.error(f"API Error: {str(e)}")
-        return {}
+        return {
+            normalize_name("Bryson DeChambeau"): -7,
+            normalize_name("Scottie Scheffler"): -5,
+            normalize_name("Ludvig Åberg"): -4
+        }
 
 def display_leaderboard(leaderboard):
     if leaderboard:
@@ -175,18 +179,14 @@ def display_leaderboard(leaderboard):
         leaderboard_df.index += 1
         
         try:
-            # Create custom color gradient
-            cmap = LinearSegmentedColormap.from_list(
-                'score', 
-                ['#00FF00', '#FFFF00', '#FF0000'],  # Green-Yellow-Red
-                N=256
-            )
+            # Convert to numeric and handle errors
+            leaderboard_df['Score'] = pd.to_numeric(leaderboard_df['Score'], errors='coerce')
             
-            # Get score range for coloring
+            # Get dynamic score range
             min_score = leaderboard_df['Score'].min()
             max_score = leaderboard_df['Score'].max()
             
-            # Handle uniform scores
+            # Ensure color gradient visibility
             if min_score == max_score:
                 min_score -= 1
                 max_score += 1
@@ -194,23 +194,23 @@ def display_leaderboard(leaderboard):
             styled_df = (
                 leaderboard_df.style
                 .background_gradient(
-                    cmap=cmap,
+                    cmap='RdYlGn_r',
                     subset=["Score"],
                     vmin=min_score,
                     vmax=max_score
                 )
-                .set_properties(**{
-                    'color': 'black',
-                    'border': '1px solid #444',
-                    'background-color': '#FFF'
-                }, subset=["Score"])
                 .format({"Score": lambda x: f"{x:+}"})
                 .hide(axis="index")
             )
             st.dataframe(styled_df, use_container_width=True)
+            
+            # Debug output
+            st.write("Score range:", min_score, "to", max_score)
+            st.write("Sample scores:", leaderboard_df['Score'].head().tolist())
+            
         except Exception as e:
-            st.dataframe(leaderboard_df[["Team", "Display Score", "Golfers"]], 
-                       use_container_width=True)
+            st.error(f"Styling error: {str(e)}")
+            st.dataframe(leaderboard_df)
 
 # Streamlit app
 def main():
@@ -234,11 +234,8 @@ def main():
         st.session_state.teams = load_teams(user_id)
 
     # Load scores
-    live_scores = get_masters_scores() or {
-        normalize_name("Bryson DeChambeau"): -7,
-        normalize_name("Scottie Scheffler"): -5,
-        normalize_name("Ludvig Åberg"): -4
-    }
+    live_scores = get_masters_scores()
+    st.write("Live scores sample:", list(live_scores.items())[:3])  # Debug output
 
     # Leaderboard calculation
     leaderboard = []
