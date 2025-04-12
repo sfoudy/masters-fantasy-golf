@@ -1,25 +1,76 @@
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import json
 import os
+import unicodedata
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-# File path for saving data
-DATA_FILE = "teams_data.json"
+# Initialize Firebase
+if not firebase_admin._apps:
+    try:
+        # For Streamlit Cloud
+        firebase_config = dict(st.secrets["firebase"])
+        cred = credentials.Certificate(firebase_config)
+    except:
+        # For local development
+        cred = credentials.Certificate("firebase.json")
+    firebase_admin.initialize_app(cred)
 
-# Function to normalize names for consistent matching
+db = firestore.client()
+
+# Helper functions
 def normalize_name(name: str) -> str:
-    return name.strip().lower()
+    return unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode().lower().strip()
 
-# Function to capitalize names properly
-def proper_case(name: str) -> str:
-    return ' '.join(word.capitalize() for word in name.split())
+def get_user_id():
+    """Generate persistent user ID using URL parameters"""
+    if 'user_id' not in st.session_state:
+        user_id = st.experimental_get_query_params().get('user_id', [None])[0]
+        if not user_id:
+            user_id = f"user_{datetime.now().timestamp()}"
+            st.experimental_set_query_params(user_id=user_id)
+        st.session_state.user_id = user_id
+    return st.session_state.user_id
 
-# Function to fetch live scores with verified field extraction
+# Data operations
+def load_teams(user_id):
+    """Load teams from Firestore with expiration check"""
+    try:
+        doc_ref = db.collection("teams").document(user_id)
+        doc = doc_ref.get()
+        
+        if doc.exists:
+            data = doc.to_dict()
+            if datetime.now() > data['expiry']:
+                doc_ref.delete()
+                return {}
+            return data.get('teams', {})
+        return {}
+    except Exception as e:
+        st.error(f"Database error: {str(e)}")
+        return {}
+
+def save_teams(user_id, teams):
+    """Save teams to Firestore with 2-day expiration"""
+    try:
+        expiry = datetime.now() + timedelta(days=2)
+        doc_ref = db.collection("teams").document(user_id)
+        doc_ref.set({
+            'teams': teams,
+            'expiry': expiry
+        })
+        return True
+    except Exception as e:
+        st.error(f"Save failed: {str(e)}")
+        return False
+
+# Score fetching
 @st.cache_data(ttl=120)
-def get_espn_scores():
+def get_masters_scores():
     try:
         url = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard"
         response = requests.get(url).json()
@@ -32,18 +83,15 @@ def get_espn_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Score extraction
-                        score = str(player.get('score', 'E')).strip()
-                        if score == 'E':
-                            score_val = 0
+                        # Score handling
+                        score = player.get('score', 'E')
+                        if isinstance(score, str):
+                            score = score.replace("E", "0").strip()
+                            score = int(score) if score else 0
                         else:
-                            try:
-                                score_val = int(score)
-                            except ValueError:
-                                score_val = 0
-                                
-                        scores[name] = score_val
-                        
+                            score = int(score)
+                            
+                        scores[name] = score
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
@@ -51,146 +99,124 @@ def get_espn_scores():
         st.error(f"API Error: {str(e)}")
         return {}
 
-# Function to load data from file
-@st.cache_data
-def load_data():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    return {}
+# Streamlit app
+def main():
+    st.set_page_config(
+        page_title="Masters Fantasy Golf Tracker",
+        layout="wide",
+        menu_items={
+            "Get Help": None,
+            "Report a bug": None,
+            "About": None,
+        }
+    )
+    
+    # Auto-refresh every 2 minutes
+    st_autorefresh(interval=2 * 60 * 1000, key="auto_refresh")
+    
+    st.title("🏌️‍♂️ Masters Fantasy Golf Tracker")
+    st.caption("Track your fantasy golf leaderboard live!")
 
-# Function to save data to file
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f)
+    # User session management
+    user_id = get_user_id()
+    
+    # Initialize teams
+    if "teams" not in st.session_state:
+        st.session_state.teams = load_teams(user_id)
 
-# Streamlit app setup
-st.set_page_config(
-    page_title="Masters Fantasy Golf Tracker",
-    layout="wide",
-    menu_items={
-        "Get Help": None,
-        "Report a bug": None,
-        "About": None,
-    },
-)
-
-# Auto-refresh every 2 minutes
-st_autorefresh(interval=2 * 60 * 1000, key="auto_refresh")
-
-st.title("🏌️‍♂️ Masters Fantasy Golf Tracker")
-st.caption("Track your fantasy golf leaderboard live!")
-
-# Initialize teams
-if "teams" not in st.session_state:
-    st.session_state.teams = load_data()
-
-# Fetch live scores
-live_scores = get_espn_scores()
-
-# Fallback data
-if not live_scores:
-    st.error("Using fallback data - API fetch failed")
-    live_scores = {
-        normalize_name("Bryson DeChambeau"): -7,
+    # Load live scores
+    live_scores = get_masters_scores() or {
         normalize_name("Scottie Scheffler"): -5,
-        normalize_name("Ludvig Åberg"): -4
+        normalize_name("Rory McIlroy"): -3
     }
 
-# Leaderboard calculation
-leaderboard = []
-for team, golfers in st.session_state.teams.items():
-    valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
-    total_score = sum(live_scores[normalize_name(g)] for g in valid_golfers)
-    
-    # Format display with proper capitalization
-    formatted_golfers = [
-        f"{proper_case(g)} ({live_scores[normalize_name(g)]:+})" 
-        for g in valid_golfers
-    ]
-    
-    leaderboard.append({
-        "Team": proper_case(team),
-        "Score": total_score,
-        "Display Score": f"{total_score:+}" if total_score != 0 else "E",
-        "Golfers": ", ".join(formatted_golfers)
-    })
+    # Leaderboard calculation
+    leaderboard = []
+    for team, golfers in st.session_state.teams.items():
+        normalized_golfers = [normalize_name(g) for g in golfers]
+        total_score = sum(live_scores.get(g, 0) for g in normalized_golfers)
+        
+        formatted_golfers = []
+        for golfer in golfers:
+            normalized = normalize_name(golfer)
+            score = live_scores.get(normalized, 0)
+            formatted = f"+{score}" if score > 0 else f"{score}" if score < 0 else "E"
+            formatted_golfers.append(f"{golfer} ({formatted})")
+        
+        leaderboard.append({
+            "Team": team,
+            "Score": total_score,
+            "Display Score": f"{total_score:+}" if total_score != 0 else "E",
+            "Golfers": ", ".join(formatted_golfers)
+        })
 
-# Display leaderboard
-st.header("📊 Fantasy Leaderboard")
-if leaderboard:
-    leaderboard_df = (
-        pd.DataFrame(leaderboard)
-        .sort_values("Score", ascending=True)
-        .reset_index(drop=True)
-    )
-    leaderboard_df.index += 1
-    
-    # Format display
-    display_df = leaderboard_df[["Team", "Display Score", "Golfers"]]
-    
-    try:
-        styled_df = (
-            leaderboard_df.style
-            .background_gradient(cmap="viridis", subset=["Score"])
-            .format({"Score": lambda x: f"{x:+}" if x != 0 else "E"})
+    # Display leaderboard
+    st.header("📊 Fantasy Leaderboard")
+    if leaderboard:
+        leaderboard_df = (
+            pd.DataFrame(leaderboard)
+            .sort_values("Score", ascending=True)
+            .reset_index(drop=True)
         )
-        st.dataframe(styled_df.hide(axis="index"), use_container_width=True)
-    except Exception as e:
-        st.dataframe(display_df, use_container_width=True)
-        st.warning(f"Styling error: {str(e)}")
-else:
-    st.warning("No teams or golfers assigned yet!")
-
-# Team management interface
-st.header("🏌️ Assign Golfers to Teams")
-valid_golfers = {k: v for k, v in live_scores.items()}
-
-for team, golfers in st.session_state.teams.items():
-    with st.form(key=f"{team}_form"):
-        # Filter invalid golfers
-        valid_defaults = [g for g in golfers if normalize_name(g) in valid_golfers]
+        leaderboard_df.index += 1
         
-        # Update session state if invalid golfers found
-        if len(valid_defaults) != len(golfers):
-            st.session_state.teams[team] = valid_defaults
-            save_data(st.session_state.teams)
-            st.rerun()
-        
-        selected_golfers = st.multiselect(
-            f"Select golfers for {team} (Max 4):",
-            options=[proper_case(g) for g in valid_golfers.keys()],
-            default=[proper_case(g) for g in valid_defaults],
-            key=f"select_{team}",
-            format_func=lambda x: f"{x} ({valid_golfers[normalize_name(x)]:+})"
-        )
-        
-        if st.form_submit_button("Save Selections"):
-            # Convert back to normalized names for storage
-            normalized_selected = [normalize_name(g) for g in selected_golfers]
-            if len(normalized_selected) > 4:
-                st.error("Maximum 4 golfers per team!")
-            else:
-                st.session_state.teams[team] = normalized_selected
-                save_data(st.session_state.teams)
+        try:
+            styled_df = leaderboard_df.style.background_gradient(
+                cmap="viridis", 
+                subset=["Score"]
+            )
+            st.dataframe(styled_df.hide(axis="index"), use_container_width=True)
+        except Exception as e:
+            st.dataframe(leaderboard_df[["Team", "Display Score", "Golfers"]], 
+                       use_container_width=True)
+    else:
+        st.warning("No teams or golfers assigned yet!")
 
-# Sidebar team management
-with st.sidebar:
-    st.header("👥 Manage Teams")
-    new_team = st.text_input("Create New Team:")
-    if st.button("Add Team") and new_team:
-        if proper_case(new_team) not in [proper_case(t) for t in st.session_state.teams.keys()]:
-            st.session_state.teams[new_team] = []
-            save_data(st.session_state.teams)
-    
-    if st.session_state.teams:
-        del_team = st.selectbox("Select team to remove:", 
-                              [proper_case(team) for team in st.session_state.teams.keys()])
-        if st.button("Remove Team"):
-            # Convert back to original casing
-            original_case_team = [team for team in st.session_state.teams.keys() 
-                                if proper_case(team) == del_team][0]
-            del st.session_state.teams[original_case_team]
-            save_data(st.session_state.teams)
+    # Team management interface
+    st.header("🏌️ Assign Golfers to Teams")
+    original_names = {normalize_name(k): k for k in live_scores.keys()}
 
-st.caption(f"Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    for team, golfers in st.session_state.teams.items():
+        with st.form(key=f"{team}_form"):
+            current_selection = [original_names.get(normalize_name(g), g) for g in golfers]
+            
+            selected_golfers = st.multiselect(
+                f"Select golfers for {team} (Max 4):",
+                options=list(original_names.values()),
+                default=current_selection,
+                key=f"select_{team}",
+                format_func=lambda x: f"{x} ({live_scores[normalize_name(x)]:+})"
+            )
+            
+            if st.form_submit_button("Save Selections"):
+                normalized_selected = [normalize_name(g) for g in selected_golfers]
+                if len(normalized_selected) > 4:
+                    st.error("Maximum 4 golfers per team!")
+                else:
+                    st.session_state.teams[team] = [original_names[g] for g in normalized_selected if g in original_names]
+                    if save_teams(user_id, st.session_state.teams):
+                        st.success("Selections saved!")
+
+    # Sidebar team management
+    with st.sidebar:
+        st.header("👥 Manage Teams")
+        new_team = st.text_input("Create New Team:")
+        if st.button("Add Team") and new_team:
+            if new_team.strip() and new_team not in st.session_state.teams:
+                st.session_state.teams[new_team] = []
+                if save_teams(user_id, st.session_state.teams):
+                    st.success(f"Team '{new_team}' created!")
+        
+        if st.session_state.teams:
+            del_team = st.selectbox("Select team to remove:", 
+                                  list(st.session_state.teams.keys()))
+            if st.button("Remove Team"):
+                del st.session_state.teams[del_team]
+                if save_teams(user_id, st.session_state.teams):
+                    st.success(f"Team '{del_team}' removed!")
+
+    st.caption(f"Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+if __name__ == "__main__":
+    main()
+
