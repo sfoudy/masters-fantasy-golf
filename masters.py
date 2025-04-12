@@ -67,7 +67,6 @@ def get_user_session():
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             
-            # Password reset section
             with st.expander("Forgot Password?"):
                 reset_email = st.text_input("Enter your email to reset password", key="reset_email")
                 if st.button("Send Reset Link"):
@@ -133,7 +132,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Verified score extraction from working version
+# Score extraction
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -147,19 +146,8 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
-                        
-                        # Working score extraction method
                         score = str(player.get('score', 'E')).strip()
-                        if score == 'E':
-                            score_val = 0
-                        else:
-                            try:
-                                score_val = int(score)
-                            except ValueError:
-                                score_val = 0
-                                
-                        scores[name] = score_val
-                        
+                        scores[name] = int(score) if score.replace('E', '0').isdigit() else 0
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
@@ -209,7 +197,7 @@ def main():
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score": f"{total_score:+}" if total_score != 0 else "E",
+            "Display Score": f"{total_score:+}",
             "Golfers": ", ".join(formatted_golfers)
         })
 
@@ -226,11 +214,23 @@ def main():
         leaderboard_df.index += 1
         
         try:
-            styled_df = leaderboard_df.style.background_gradient(
-                cmap="viridis", 
-                subset=["Score"]
+            # Enhanced styling
+            styled_df = (
+                leaderboard_df.style
+                .background_gradient(
+                    cmap='RdYlGn_r',  # Reversed Red-Yellow-Green
+                    subset=["Score"],
+                    vmin=-20,  # Assuming golf scores rarely go below -20
+                    vmax=20    # And rarely above +20
+                )
+                .set_properties(**{
+                    'color': 'white',
+                    'border': '1px solid black'
+                }, subset=["Score"])
+                .format({"Score": lambda x: f"{x:+}"})
+                .hide(axis="index")
             )
-            st.dataframe(styled_df.hide(axis="index"), use_container_width=True)
+            st.dataframe(styled_df, use_container_width=True)
         except Exception as e:
             st.dataframe(leaderboard_df[["Team", "Display Score", "Golfers"]], 
                        use_container_width=True)
@@ -271,7 +271,6 @@ def main():
     with st.sidebar:
         st.header("👥 Manage Teams")
         
-        # Logout button
         if st.button("🚪 Log Out"):
             del st.session_state.user_id
             st.rerun()
