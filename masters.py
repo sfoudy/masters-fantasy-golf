@@ -18,7 +18,7 @@ if not firebase_admin._apps:
         st.stop()
 
 db = firestore.client()
-FIREBASE_WEB_API_KEY = st.secrets["FIREBASE_WEB_API_KEY"]
+FIREBASE_WEB_API_KEY = st.secrets["firebase_auth"]["web_api_key"]
 
 # Authentication functions
 def create_user(email: str, password: str):
