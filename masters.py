@@ -132,7 +132,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Verified score extraction from working version
+# Verified score extraction
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -146,25 +146,53 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
-                        
-                        # Working score extraction method
                         score = str(player.get('score', 'E')).strip()
-                        if score == 'E':
-                            score_val = 0
-                        else:
-                            try:
-                                score_val = int(score)
-                            except ValueError:
-                                score_val = 0
-                                
-                        scores[name] = score_val
-                        
+                        scores[name] = int(score) if score.replace('E', '0').isdigit() else 0
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
     except Exception as e:
         st.error(f"API Error: {str(e)}")
         return {}
+
+def display_leaderboard(leaderboard):
+    if leaderboard:
+        leaderboard_df = (
+            pd.DataFrame(leaderboard)
+            .sort_values("Score", ascending=True)
+            .reset_index(drop=True)
+        )
+        leaderboard_df.index += 1
+        
+        try:
+            # Dynamic color range based on actual scores
+            min_score = leaderboard_df['Score'].min()
+            max_score = leaderboard_df['Score'].max()
+            
+            # Handle case where all scores are equal
+            if min_score == max_score:
+                min_score -= 1
+                max_score += 1
+
+            styled_df = (
+                leaderboard_df.style
+                .background_gradient(
+                    cmap='RdYlGn_r',
+                    subset=["Score"],
+                    vmin=min_score,
+                    vmax=max_score
+                )
+                .set_properties(**{
+                    'color': 'white',
+                    'border': '1px solid grey'
+                }, subset=["Score"])
+                .format({"Score": lambda x: f"{x:+}"})
+                .hide(axis="index")
+            )
+            st.dataframe(styled_df, use_container_width=True)
+        except Exception as e:
+            st.dataframe(leaderboard_df[["Team", "Display Score", "Golfers"]], 
+                       use_container_width=True)
 
 # Streamlit app
 def main():
@@ -197,13 +225,15 @@ def main():
     # Leaderboard calculation
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
-        valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
-        total_score = sum(live_scores[normalize_name(g)] for g in valid_golfers)
+        normalized_golfers = [normalize_name(g) for g in golfers]
+        total_score = sum(live_scores.get(g, 0) for g in normalized_golfers)
         
-        formatted_golfers = [
-            f"{proper_case(g)} ({live_scores[normalize_name(g)]:+})" 
-            for g in valid_golfers
-        ]
+        formatted_golfers = []
+        for golfer in golfers:
+            normalized = normalize_name(golfer)
+            score = live_scores.get(normalized, 0)
+            formatted = f"{score:+}" if score != 0 else "E"
+            formatted_golfers.append(f"{proper_case(golfer)} ({formatted})")
         
         leaderboard.append({
             "Team": proper_case(team),
@@ -215,38 +245,7 @@ def main():
     # Display interface
     st.title("🏌️‍♂️ Masters Fantasy Golf Tracker")
     st.header("📊 Fantasy Leaderboard")
-    
-    if leaderboard:
-        leaderboard_df = (
-            pd.DataFrame(leaderboard)
-            .sort_values("Score", ascending=True)
-            .reset_index(drop=True)
-        )
-        leaderboard_df.index += 1
-        
-        try:
-            # Score-based coloring
-            styled_df = (
-                leaderboard_df.style
-                .background_gradient(
-                    cmap='RdYlGn_r',
-                    subset=["Score"],
-                    vmin=-20,
-                    vmax=20
-                )
-                .set_properties(**{
-                    'color': 'white',
-                    'border': '1px solid grey'
-                })
-                .format({"Score": lambda x: f"{x:+}"})
-                .hide(axis="index")
-            )
-            st.dataframe(styled_df, use_container_width=True)
-        except Exception as e:
-            st.dataframe(leaderboard_df[["Team", "Display Score", "Golfers"]], 
-                       use_container_width=True)
-    else:
-        st.warning("No teams or golfers assigned yet!")
+    display_leaderboard(leaderboard)
 
     # Team management
     st.header("🏌️ Assign Golfers to Teams")
