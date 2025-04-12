@@ -7,10 +7,9 @@ import unicodedata
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Initialize Firebase with error handling
+# Initialize Firebase
 if not firebase_admin._apps:
     try:
-        # For Streamlit Cloud
         firebase_config = dict(st.secrets["firebase"])
         cred = credentials.Certificate(firebase_config)
     except Exception as e:
@@ -70,7 +69,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Score fetching
+# Updated score fetching with proper relative-to-par handling
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -84,8 +83,22 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
-                        score = player.get('score', 'E')
-                        scores[name] = int(score) if str(score).isdigit() else 0
+                        
+                        # CORRECTED: Use scoreToPar instead of score
+                        score = player.get('scoreToPar', 'E')
+                        
+                        # Handle different score formats
+                        if isinstance(score, str):
+                            score = score.strip().replace("E", "0")
+                            try:
+                                score_val = int(score)
+                            except ValueError:
+                                score_val = 0
+                        else:
+                            score_val = int(score)
+                            
+                        scores[name] = score_val
+                        
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
@@ -117,7 +130,7 @@ def main():
     if "teams" not in st.session_state:
         st.session_state.teams = load_teams(user_id)
 
-    # Load scores
+    # Load scores with proper relative-to-par values
     live_scores = get_masters_scores() or {
         normalize_name("Scottie Scheffler"): -5,
         normalize_name("Rory McIlroy"): -3
