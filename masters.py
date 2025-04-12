@@ -7,7 +7,7 @@ import unicodedata
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Initialize Firebase with timezone awareness
+# Initialize Firebase
 if not firebase_admin._apps:
     try:
         firebase_config = dict(st.secrets["firebase"])
@@ -39,7 +39,7 @@ def get_user_id():
         st.session_state.user_id = user_id
     return st.session_state.user_id
 
-# Data operations with UTC timezone
+# Data operations
 def load_teams(user_id):
     try:
         doc_ref = db.collection("teams").document(user_id)
@@ -70,7 +70,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Score fetching with totalToPar
+# Updated score calculation using raw strokes and course par
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -79,23 +79,24 @@ def get_masters_scores():
         
         scores = {}
         for event in response.get('events', []):
+            # Get course par from API response
+            course_par = 72  # Default if not found
+            try:
+                course_par = int(event['competitions'][0]['course']['par'])
+            except (KeyError, TypeError):
+                pass
+            
             for competition in event.get('competitions', []):
                 for player in competition.get('competitors', []):
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Get total tournament score
-                        total_score = player.get('totalToPar', player.get('scoreToPar', 'E'))
+                        # Calculate score relative to par using total strokes
+                        total_strokes = int(player.get('total', course_par))
+                        score = total_strokes - course_par
                         
-                        # Convert to integer
-                        if isinstance(total_score, str):
-                            total_score = total_score.replace("E", "0").strip()
-                            total_score = int(total_score) if total_score else 0
-                        else:
-                            total_score = int(total_score)
-                            
-                        scores[name] = total_score
+                        scores[name] = score
                         
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
@@ -128,7 +129,7 @@ def main():
     if "teams" not in st.session_state:
         st.session_state.teams = load_teams(user_id)
 
-    # Load scores
+    # Load scores with accurate relative-to-par calculation
     live_scores = get_masters_scores() or {
         normalize_name("Scottie Scheffler"): -7,
         normalize_name("Rory McIlroy"): -3
@@ -144,7 +145,7 @@ def main():
         for golfer in golfers:
             normalized = normalize_name(golfer)
             score = live_scores.get(normalized, 0)
-            formatted = f"{score:+}"  # Always show +/- notation
+            formatted = f"{score:+}"  # Always show +/- including "+0"
             formatted_golfers.append(f"{golfer} ({formatted})")
         
         leaderboard.append({
