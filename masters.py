@@ -20,7 +20,6 @@ if not firebase_admin._apps:
 db = firestore.client()
 FIREBASE_WEB_API_KEY = st.secrets["firebase_auth"]["web_api_key"]
 
-# Authentication functions
 def send_password_reset_email(email: str):
     try:
         response = requests.post(
@@ -36,10 +35,7 @@ def send_password_reset_email(email: str):
 
 def create_user(email: str, password: str):
     try:
-        user = auth.create_user(
-            email=email,
-            password=password
-        )
+        user = auth.create_user(email=email, password=password)
         return user.uid
     except Exception as e:
         st.error(f"Account creation failed: {str(e)}")
@@ -51,273 +47,168 @@ def authenticate_user(email: str, password: str):
             f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_WEB_API_KEY}",
             json={"email": email, "password": password, "returnSecureToken": True}
         )
-        if response.status_code == 200:
-            return response.json()['localId']
-        st.error("Invalid email or password")
-        return None
+        return response.json()['localId'] if response.status_code == 200 else None
     except Exception as e:
         st.error(f"Authentication failed: {str(e)}")
         return None
 
-# User session management
 def get_user_session():
     if 'user_id' not in st.session_state:
         with st.container():
-            st.header("🔒 Login / Register")
+            st.header("🔒 Login/Register")
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             
             with st.expander("Forgot Password?"):
-                reset_email = st.text_input("Enter your email to reset password", key="reset_email")
-                if st.button("Send Reset Link"):
-                    if "@" in reset_email and "." in reset_email:
-                        send_password_reset_email(reset_email)
-                    else:
-                        st.error("Please enter a valid email address")
+                reset_email = st.text_input("Enter email to reset password", key="reset_email")
+                if st.button("Send Reset Link") and "@" in reset_email and "." in reset_email:
+                    send_password_reset_email(reset_email)
             
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("Sign In"):
-                    if email and password:
-                        user_id = authenticate_user(email, password)
-                        if user_id:
-                            st.session_state.user_id = user_id
-                            st.rerun()
+                if st.button("Sign In") and email and password:
+                    if user_id := authenticate_user(email, password):
+                        st.session_state.user_id = user_id
+                        st.rerun()
             with col2:
-                if st.button("Create Account"):
-                    if email and password:
-                        if len(password) < 8:
-                            st.error("Password must be at least 8 characters")
-                        else:
-                            user_id = create_user(email, password)
-                            if user_id:
-                                st.success("Account created! Please sign in.")
+                if st.button("Create Account") and email and password:
+                    if len(password) < 8:
+                        st.error("Password must be ≥8 characters")
+                    elif user_id := create_user(email, password):
+                        st.success("Account created! Please sign in.")
             st.stop()
     return st.session_state.user_id
 
-# Helper functions
 def normalize_name(name: str) -> str:
     return unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode().lower().strip()
 
 def proper_case(name: str) -> str:
     return ' '.join(word.capitalize() for word in name.split())
 
-# Data operations
 def load_teams(user_id):
     try:
         doc_ref = db.collection("teams").document(user_id)
         doc = doc_ref.get()
-        
-        if doc.exists:
-            data = doc.to_dict()
-            if datetime.now(timezone.utc) > data['expiry']:
-                doc_ref.delete()
-                return {}
-            return data.get('teams', {})
-        return {}
+        return doc.to_dict().get('teams', {}) if doc.exists and datetime.now(timezone.utc) < doc.to_dict().get('expiry', datetime.min) else {}
     except Exception as e:
         st.error(f"Database error: {str(e)}")
         return {}
 
 def save_teams(user_id, teams):
     try:
-        expiry = datetime.now(timezone.utc) + timedelta(days=2)
-        doc_ref = db.collection("teams").document(user_id)
-        doc_ref.set({
+        db.collection("teams").document(user_id).set({
             'teams': teams,
-            'expiry': expiry
+            'expiry': datetime.now(timezone.utc) + timedelta(days=2)
         })
         return True
     except Exception as e:
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Verified score extraction
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
-        url = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard"
-        response = requests.get(url).json()
-        
+        response = requests.get("https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard").json()
         scores = {}
         for event in response.get('events', []):
             for competition in event.get('competitions', []):
                 for player in competition.get('competitors', []):
                     try:
                         raw_name = player['athlete']['displayName']
-                        name = normalize_name(raw_name)
-                        
-                        # Get score from correct API field
-                        score = player.get('scoreToPar', player.get('totalToPar', 'E'))
-                        
-                        # Convert to integer with validation
-                        if isinstance(score, str):
-                            score = score.replace("E", "0").strip()
-                        score_val = int(score) if score else 0
-                            
-                        scores[name] = score_val
-                        st.write(f"Processed {raw_name}: {score_val}")  # Debug output
-                        
+                        score = str(player.get('score', 'E')).strip()
+                        scores[normalize_name(raw_name)] = 0 if score == 'E' else int(score)
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
     except Exception as e:
         st.error(f"API Error: {str(e)}")
-        return {
-            normalize_name("Bryson DeChambeau"): -7,
-            normalize_name("Scottie Scheffler"): -5,
-            normalize_name("Ludvig Åberg"): -4
-        }
+        return {}
 
 def display_leaderboard(leaderboard):
     if leaderboard:
-        leaderboard_df = (
-            pd.DataFrame(leaderboard)
-            .sort_values("Score", ascending=True)
-            .reset_index(drop=True)
-        )
+        leaderboard_df = pd.DataFrame(leaderboard).sort_values("Score", ascending=True).reset_index(drop=True)
         leaderboard_df.index += 1
         
         try:
-            # Convert to numeric and handle errors
             leaderboard_df['Score'] = pd.to_numeric(leaderboard_df['Score'], errors='coerce')
-            
-            # Get dynamic score range
-            min_score = leaderboard_df['Score'].min()
-            max_score = leaderboard_df['Score'].max()
-            
-            # Ensure color gradient visibility
-            if min_score == max_score:
-                min_score -= 1
-                max_score += 1
+            min_score, max_score = leaderboard_df['Score'].min(), leaderboard_df['Score'].max()
+            min_score = min_score - 1 if min_score == max_score else min_score
+            max_score = max_score + 1 if min_score == max_score else max_score
 
-            styled_df = (
+            st.dataframe(
                 leaderboard_df.style
-                .background_gradient(
-                    cmap='RdYlGn_r',
-                    subset=["Score"],
-                    vmin=min_score,
-                    vmax=max_score
-                )
+                .background_gradient(cmap='RdYlGn_r', subset=["Score"], vmin=min_score, vmax=max_score)
                 .format({"Score": lambda x: f"{x:+}"})
-                .hide(axis="index")
+                .hide(axis="index"),
+                use_container_width=True
             )
-            st.dataframe(styled_df, use_container_width=True)
-            
-            # Debug output
-            st.write("Score range:", min_score, "to", max_score)
-            st.write("Sample scores:", leaderboard_df['Score'].head().tolist())
-            
         except Exception as e:
-            st.error(f"Styling error: {str(e)}")
-            st.dataframe(leaderboard_df)
+            st.dataframe(leaderboard_df[["Team", "Display Score", "Golfers"]], use_container_width=True)
 
-# Streamlit app
 def main():
-    st.set_page_config(
-        page_title="Masters Fantasy Golf Tracker",
-        layout="wide",
-        menu_items={
-            "Get Help": None,
-            "Report a bug": None,
-            "About": None,
-        }
-    )
+    st.set_page_config(page_title="Masters Fantasy Golf Tracker", layout="wide")
+    st_autorefresh(interval=120000, key="auto_refresh")
     
-    st_autorefresh(interval=2 * 60 * 1000, key="auto_refresh")
-    
-    # Authentication
     user_id = get_user_session()
+    st.session_state.teams = load_teams(user_id) if "teams" not in st.session_state else st.session_state.teams
     
-    # Initialize teams
-    if "teams" not in st.session_state:
-        st.session_state.teams = load_teams(user_id)
+    live_scores = get_masters_scores() or {
+        normalize_name("Bryson DeChambeau"): -7,
+        normalize_name("Scottie Scheffler"): -5,
+        normalize_name("Ludvig Åberg"): -4
+    }
 
-    # Load scores
-    live_scores = get_masters_scores()
-    st.write("Live scores sample:", list(live_scores.items())[:3])  # Debug output
-
-    # Leaderboard calculation
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
-        normalized_golfers = [normalize_name(g) for g in golfers]
-        total_score = sum(live_scores.get(g, 0) for g in normalized_golfers)
-        
-        formatted_golfers = []
-        for golfer in golfers:
-            normalized = normalize_name(golfer)
-            score = live_scores.get(normalized, 0)
-            formatted = f"{score:+}" if score != 0 else "E"
-            formatted_golfers.append(f"{proper_case(golfer)} ({formatted})")
-        
+        valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
+        total_score = sum(live_scores[normalize_name(g)] for g in valid_golfers)
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
             "Display Score": f"{total_score:+}",
-            "Golfers": ", ".join(formatted_golfers)
+            "Golfers": ", ".join([f"{proper_case(g)} ({live_scores[normalize_name(g)]:+})" for g in valid_golfers])
         })
 
-    # Display interface
     st.title("🏌️‍♂️ Masters Fantasy Golf Tracker")
     st.header("📊 Fantasy Leaderboard")
     display_leaderboard(leaderboard)
 
-    # Team management
     st.header("🏌️ Assign Golfers to Teams")
     valid_golfers = {k: v for k, v in live_scores.items()}
-
     for team, golfers in st.session_state.teams.items():
         with st.form(key=f"{team}_form"):
-            valid_defaults = [g for g in golfers if normalize_name(g) in valid_golfers]
-            
-            # Process defaults to match option format
-            options = [proper_case(g) for g in valid_golfers.keys()]
-            processed_defaults = [
-                proper_case(g) for g in valid_defaults 
-                if proper_case(g) in options
-            ]
-            
-            selected_golfers = st.multiselect(
+            current = [proper_case(g) for g in golfers if normalize_name(g) in valid_golfers]
+            selected = st.multiselect(
                 f"Select golfers for {team} (Max 4):",
-                options=options,
-                default=processed_defaults,
+                options=[proper_case(g) for g in valid_golfers.keys()],
+                default=current,
                 key=f"select_{team}",
                 format_func=lambda x: f"{x} ({valid_golfers[normalize_name(x)]:+})"
             )
-            
             if st.form_submit_button("Save Selections"):
-                normalized_selected = [normalize_name(g) for g in selected_golfers]
-                if len(normalized_selected) > 4:
-                    st.error("Maximum 4 golfers per team!")
+                if len(selected) <= 4:
+                    st.session_state.teams[team] = [normalize_name(g) for g in selected]
+                    save_teams(user_id, st.session_state.teams)
                 else:
-                    st.session_state.teams[team] = normalized_selected
-                    if save_teams(user_id, st.session_state.teams):
-                        st.success("Selections saved!")
+                    st.error("Maximum 4 golfers per team!")
 
-    # Sidebar controls
     with st.sidebar:
         st.header("👥 Manage Teams")
-        
         if st.button("🚪 Log Out"):
             del st.session_state.user_id
             st.rerun()
         
         new_team = st.text_input("Create New Team:")
-        if st.button("Add Team") and new_team:
-            if new_team.strip() and proper_case(new_team) not in [proper_case(t) for t in st.session_state.teams]:
-                st.session_state.teams[new_team] = []
-                if save_teams(user_id, st.session_state.teams):
-                    st.success(f"Team '{new_team}' created!")
+        if st.button("Add Team") and new_team.strip():
+            st.session_state.teams[new_team] = []
+            save_teams(user_id, st.session_state.teams)
         
         if st.session_state.teams:
-            del_team = st.selectbox("Select team to remove:", 
-                                  [proper_case(team) for team in st.session_state.teams])
+            del_team = st.selectbox("Select team to remove:", [proper_case(t) for t in st.session_state.teams])
             if st.button("Remove Team"):
-                original_case_team = [team for team in st.session_state.teams 
-                                    if proper_case(team) == del_team][0]
-                del st.session_state.teams[original_case_team]
-                if save_teams(user_id, st.session_state.teams):
-                    st.success(f"Team '{original_case_team}' removed!")
+                original = [t for t in st.session_state.teams if proper_case(t) == del_team][0]
+                del st.session_state.teams[original]
+                save_teams(user_id, st.session_state.teams)
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
