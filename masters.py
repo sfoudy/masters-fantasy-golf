@@ -57,7 +57,7 @@ def get_user_session():
 
 # Helper functions
 def normalize_name(name: str) -> str:
-    return unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode().lower().strip()
+    return name.strip().lower()
 
 def proper_case(name: str) -> str:
     return ' '.join(word.capitalize() for word in name.split())
@@ -92,7 +92,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Verified score extraction (relative to par)
+# Verified score extraction from working version
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -107,17 +107,17 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Correct score extraction (relative to par)
-                        score = player.get('scoreToPar', player.get('totalToPar', 'E'))
-                        
-                        # Handle different score formats
-                        if isinstance(score, str):
-                            score = score.replace("E", "0").strip()
-                            score = int(score) if score else 0
+                        # Working score extraction method
+                        score = str(player.get('score', 'E')).strip()
+                        if score == 'E':
+                            score_val = 0
                         else:
-                            score = int(score)
-                            
-                        scores[name] = score
+                            try:
+                                score_val = int(score)
+                            except ValueError:
+                                score_val = 0
+                                
+                        scores[name] = score_val
                         
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
@@ -149,27 +149,26 @@ def main():
 
     # Load scores
     live_scores = get_masters_scores() or {
-        normalize_name("Scottie Scheffler"): -7,
-        normalize_name("Rory McIlroy"): -5
+        normalize_name("Bryson DeChambeau"): -7,
+        normalize_name("Scottie Scheffler"): -5,
+        normalize_name("Ludvig Åberg"): -4
     }
 
     # Leaderboard calculation
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
-        normalized_golfers = [normalize_name(g) for g in golfers]
-        total_score = sum(live_scores.get(g, 0) for g in normalized_golfers)
+        valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
+        total_score = sum(live_scores[normalize_name(g)] for g in valid_golfers)
         
-        formatted_golfers = []
-        for golfer in golfers:
-            normalized = normalize_name(golfer)
-            score = live_scores.get(normalized, 0)
-            formatted = f"{score:+}" if score != 0 else "E"
-            formatted_golfers.append(f"{proper_case(golfer)} ({formatted})")
+        formatted_golfers = [
+            f"{proper_case(g)} ({live_scores[normalize_name(g)]:+})" 
+            for g in valid_golfers
+        ]
         
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score": f"{total_score:+}",
+            "Display Score": f"{total_score:+}" if total_score != 0 else "E",
             "Golfers": ", ".join(formatted_golfers)
         })
 
@@ -199,18 +198,23 @@ def main():
 
     # Team management
     st.header("🏌️ Assign Golfers to Teams")
-    original_names = {normalize_name(k): k for k in live_scores.keys()}
+    valid_golfers = {k: v for k, v in live_scores.items()}
 
     for team, golfers in st.session_state.teams.items():
         with st.form(key=f"{team}_form"):
-            current_selection = [original_names.get(normalize_name(g), g) for g in golfers]
+            valid_defaults = [g for g in golfers if normalize_name(g) in valid_golfers]
+            
+            if len(valid_defaults) != len(golfers):
+                st.session_state.teams[team] = valid_defaults
+                save_teams(user_id, st.session_state.teams)
+                st.rerun()
             
             selected_golfers = st.multiselect(
                 f"Select golfers for {team} (Max 4):",
-                options=[proper_case(g) for g in original_names.values()],
-                default=[proper_case(g) for g in current_selection],
+                options=[proper_case(g) for g in valid_golfers.keys()],
+                default=[proper_case(g) for g in valid_defaults],
                 key=f"select_{team}",
-                format_func=lambda x: f"{x} ({live_scores[normalize_name(x)]:+})"
+                format_func=lambda x: f"{x} ({valid_golfers[normalize_name(x)]:+})"
             )
             
             if st.form_submit_button("Save Selections"):
@@ -218,7 +222,7 @@ def main():
                 if len(normalized_selected) > 4:
                     st.error("Maximum 4 golfers per team!")
                 else:
-                    st.session_state.teams[team] = [original_names[g] for g in normalized_selected if g in original_names]
+                    st.session_state.teams[team] = normalized_selected
                     if save_teams(user_id, st.session_state.teams):
                         st.success("Selections saved!")
 
