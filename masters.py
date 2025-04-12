@@ -3,22 +3,26 @@ from streamlit_autorefresh import st_autorefresh
 import requests
 from datetime import datetime, timedelta
 import pandas as pd
-import json
-import os
 import unicodedata
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Initialize Firebase
+# Initialize Firebase with error handling
 if not firebase_admin._apps:
     try:
         # For Streamlit Cloud
         firebase_config = dict(st.secrets["firebase"])
         cred = credentials.Certificate(firebase_config)
-    except:
-        # For local development
-        cred = credentials.Certificate("firebase.json")
-    firebase_admin.initialize_app(cred)
+    except Exception as e:
+        st.error(f"Firebase config error: {str(e)}")
+        cred = credentials.ApplicationDefault()
+    
+    try:
+        firebase_admin.initialize_app(cred, {
+            'projectId': 'mastersscore-2c73b',
+        })
+    except Exception as e:
+        st.error(f"Firebase initialization failed: {str(e)}")
 
 db = firestore.client()
 
@@ -27,18 +31,17 @@ def normalize_name(name: str) -> str:
     return unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode().lower().strip()
 
 def get_user_id():
-    """Generate persistent user ID using URL parameters"""
+    """Generate persistent user ID using modern query params"""
     if 'user_id' not in st.session_state:
-        user_id = st.experimental_get_query_params().get('user_id', [None])[0]
+        user_id = st.query_params.get("user_id", None)
         if not user_id:
             user_id = f"user_{datetime.now().timestamp()}"
-            st.experimental_set_query_params(user_id=user_id)
+            st.query_params["user_id"] = user_id
         st.session_state.user_id = user_id
     return st.session_state.user_id
 
 # Data operations
 def load_teams(user_id):
-    """Load teams from Firestore with expiration check"""
     try:
         doc_ref = db.collection("teams").document(user_id)
         doc = doc_ref.get()
@@ -55,7 +58,6 @@ def load_teams(user_id):
         return {}
 
 def save_teams(user_id, teams):
-    """Save teams to Firestore with 2-day expiration"""
     try:
         expiry = datetime.now() + timedelta(days=2)
         doc_ref = db.collection("teams").document(user_id)
@@ -82,16 +84,8 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
-                        
-                        # Score handling
                         score = player.get('score', 'E')
-                        if isinstance(score, str):
-                            score = score.replace("E", "0").strip()
-                            score = int(score) if score else 0
-                        else:
-                            score = int(score)
-                            
-                        scores[name] = score
+                        scores[name] = int(score) if str(score).isdigit() else 0
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
@@ -111,7 +105,6 @@ def main():
         }
     )
     
-    # Auto-refresh every 2 minutes
     st_autorefresh(interval=2 * 60 * 1000, key="auto_refresh")
     
     st.title("🏌️‍♂️ Masters Fantasy Golf Tracker")
@@ -124,7 +117,7 @@ def main():
     if "teams" not in st.session_state:
         st.session_state.teams = load_teams(user_id)
 
-    # Load live scores
+    # Load scores
     live_scores = get_masters_scores() or {
         normalize_name("Scottie Scheffler"): -5,
         normalize_name("Rory McIlroy"): -3
@@ -140,7 +133,7 @@ def main():
         for golfer in golfers:
             normalized = normalize_name(golfer)
             score = live_scores.get(normalized, 0)
-            formatted = f"+{score}" if score > 0 else f"{score}" if score < 0 else "E"
+            formatted = f"{score:+}" if score != 0 else "E"
             formatted_golfers.append(f"{golfer} ({formatted})")
         
         leaderboard.append({
@@ -197,7 +190,7 @@ def main():
                     if save_teams(user_id, st.session_state.teams):
                         st.success("Selections saved!")
 
-    # Sidebar team management
+    # Sidebar management
     with st.sidebar:
         st.header("👥 Manage Teams")
         new_team = st.text_input("Create New Team:")
@@ -219,4 +212,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
