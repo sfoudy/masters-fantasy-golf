@@ -146,19 +146,8 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
-                        
-                        # Correct score extraction method
                         score = str(player.get('score', 'E')).strip()
-                        if score == 'E':
-                            score_val = 0
-                        else:
-                            try:
-                                score_val = int(score)
-                            except ValueError:
-                                score_val = 0
-                                
-                        scores[name] = score_val
-                        
+                        scores[name] = int(score) if score.replace('E', '0').isdigit() else 0
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
@@ -236,7 +225,7 @@ def main():
                 )
                 .set_properties(**{
                     'color': 'white',
-                    'border': '1px solid black'
+                    'border': '1px solid grey'
                 }, subset=["Score"])
                 .format({"Score": lambda x: f"{x:+}"})
                 .hide(axis="index")
@@ -256,15 +245,17 @@ def main():
         with st.form(key=f"{team}_form"):
             valid_defaults = [g for g in golfers if normalize_name(g) in valid_golfers]
             
-            if len(valid_defaults) != len(golfers):
-                st.session_state.teams[team] = valid_defaults
-                save_teams(user_id, st.session_state.teams)
-                st.rerun()
+            # Process defaults to match option format
+            options = [proper_case(g) for g in valid_golfers.keys()]
+            processed_defaults = [
+                proper_case(g) for g in valid_defaults 
+                if proper_case(g) in options
+            ]
             
             selected_golfers = st.multiselect(
                 f"Select golfers for {team} (Max 4):",
-                options=[proper_case(g) for g in valid_golfers.keys()],
-                default=[proper_case(g) for g in valid_defaults],
+                options=options,
+                default=processed_defaults,
                 key=f"select_{team}",
                 format_func=lambda x: f"{x} ({valid_golfers[normalize_name(x)]:+})"
             )
