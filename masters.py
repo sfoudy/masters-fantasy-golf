@@ -21,6 +21,19 @@ db = firestore.client()
 FIREBASE_WEB_API_KEY = st.secrets["firebase_auth"]["web_api_key"]
 
 # Authentication functions
+def send_password_reset_email(email: str):
+    try:
+        response = requests.post(
+            f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={FIREBASE_WEB_API_KEY}",
+            json={"requestType": "PASSWORD_RESET", "email": email}
+        )
+        if response.status_code == 200:
+            st.success("Password reset email sent! Check your inbox.")
+        else:
+            st.error("Failed to send reset email. Check if email is registered.")
+    except Exception as e:
+        st.error(f"Error sending reset email: {str(e)}")
+
 def create_user(email: str, password: str):
     try:
         user = auth.create_user(
@@ -33,17 +46,10 @@ def create_user(email: str, password: str):
         return None
 
 def authenticate_user(email: str, password: str):
-    url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
-    payload = {
-        "email": email,
-        "password": password,
-        "returnSecureToken": True
-    }
-    
     try:
         response = requests.post(
-            f"{url}?key={FIREBASE_WEB_API_KEY}",
-            json=payload
+            f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_WEB_API_KEY}",
+            json={"email": email, "password": password, "returnSecureToken": True}
         )
         if response.status_code == 200:
             return response.json()['localId']
@@ -61,24 +67,32 @@ def get_user_session():
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             
+            # Password reset section
+            with st.expander("Forgot Password?"):
+                reset_email = st.text_input("Enter your email to reset password", key="reset_email")
+                if st.button("Send Reset Link"):
+                    if "@" in reset_email and "." in reset_email:
+                        send_password_reset_email(reset_email)
+                    else:
+                        st.error("Please enter a valid email address")
+            
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Sign In"):
-                    if not password:
-                        st.error("Password is required")
-                    else:
+                    if email and password:
                         user_id = authenticate_user(email, password)
                         if user_id:
                             st.session_state.user_id = user_id
                             st.rerun()
             with col2:
                 if st.button("Create Account"):
-                    if not password:
-                        st.error("Password is required")
-                    else:
-                        user_id = create_user(email, password)
-                        if user_id:
-                            st.success("Account created! Please sign in.")
+                    if email and password:
+                        if len(password) < 8:
+                            st.error("Password must be at least 8 characters")
+                        else:
+                            user_id = create_user(email, password)
+                            if user_id:
+                                st.success("Account created! Please sign in.")
             st.stop()
     return st.session_state.user_id
 
