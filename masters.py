@@ -98,7 +98,7 @@ def get_user_session():
 
 # Helper functions
 def normalize_name(name: str) -> str:
-    return name.strip().lower()
+    return unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode().lower().strip()
 
 def proper_case(name: str) -> str:
     return ' '.join(word.capitalize() for word in name.split())
@@ -133,7 +133,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Score extraction
+# Verified score extraction
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -147,8 +147,19 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
+                        
+                        # Correct score extraction from working version
                         score = str(player.get('score', 'E')).strip()
-                        scores[name] = int(score) if score.replace('E', '0').isdigit() else 0
+                        if score == 'E':
+                            score_val = 0
+                        else:
+                            try:
+                                score_val = int(score)
+                            except ValueError:
+                                score_val = 0
+                                
+                        scores[name] = score_val
+                        
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
