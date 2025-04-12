@@ -18,17 +18,40 @@ if not firebase_admin._apps:
         st.stop()
 
 db = firestore.client()
+FIREBASE_WEB_API_KEY = st.secrets["FIREBASE_WEB_API_KEY"]
 
 # Authentication functions
-def authenticate_user(email, password):
+def create_user(email: str, password: str):
     try:
-        user = auth.get_user_by_email(email)
+        user = auth.create_user(
+            email=email,
+            password=password
+        )
         return user.uid
-    except auth.UserNotFoundError:
-        st.error("User not found")
-    except auth.AuthError:
-        st.error("Authentication failed")
-    return None
+    except Exception as e:
+        st.error(f"Account creation failed: {str(e)}")
+        return None
+
+def authenticate_user(email: str, password: str):
+    url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
+    payload = {
+        "email": email,
+        "password": password,
+        "returnSecureToken": True
+    }
+    
+    try:
+        response = requests.post(
+            f"{url}?key={FIREBASE_WEB_API_KEY}",
+            json=payload
+        )
+        if response.status_code == 200:
+            return response.json()['localId']
+        st.error("Invalid email or password")
+        return None
+    except Exception as e:
+        st.error(f"Authentication failed: {str(e)}")
+        return None
 
 # User session management
 def get_user_session():
@@ -41,17 +64,21 @@ def get_user_session():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Sign In"):
-                    user_id = authenticate_user(email, password)
-                    if user_id:
-                        st.session_state.user_id = user_id
-                        st.rerun()
+                    if not password:
+                        st.error("Password is required")
+                    else:
+                        user_id = authenticate_user(email, password)
+                        if user_id:
+                            st.session_state.user_id = user_id
+                            st.rerun()
             with col2:
                 if st.button("Create Account"):
-                    try:
-                        user = auth.create_user(email=email)
-                        st.success("Account created! Please sign in.")
-                    except Exception as e:
-                        st.error(f"Creation failed: {str(e)}")
+                    if not password:
+                        st.error("Password is required")
+                    else:
+                        user_id = create_user(email, password)
+                        if user_id:
+                            st.success("Account created! Please sign in.")
             st.stop()
     return st.session_state.user_id
 
@@ -92,7 +119,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Verified score extraction from working version
+# Score extraction
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -106,19 +133,8 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
-                        
-                        # Working score extraction method
                         score = str(player.get('score', 'E')).strip()
-                        if score == 'E':
-                            score_val = 0
-                        else:
-                            try:
-                                score_val = int(score)
-                            except ValueError:
-                                score_val = 0
-                                
-                        scores[name] = score_val
-                        
+                        scores[name] = int(score) if score.replace('E', '0').isdigit() else 0
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
