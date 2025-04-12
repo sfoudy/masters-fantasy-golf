@@ -69,7 +69,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Updated score fetching with proper relative-to-par handling
+# Updated to show TOTAL tournament scores
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -84,20 +84,20 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # CORRECTED: Use scoreToPar instead of score
-                        score = player.get('scoreToPar', 'E')
+                        # Get TOTAL score relative to par for the tournament
+                        total_score = player.get('totalToPar', player.get('scoreToPar', 'E'))
                         
-                        # Handle different score formats
-                        if isinstance(score, str):
-                            score = score.strip().replace("E", "0")
+                        # Convert to integer (handles "E" as 0)
+                        if isinstance(total_score, str):
+                            total_score = total_score.replace("E", "0").strip()
                             try:
-                                score_val = int(score)
+                                total_score = int(total_score)
                             except ValueError:
-                                score_val = 0
+                                total_score = 0
                         else:
-                            score_val = int(score)
+                            total_score = int(total_score)
                             
-                        scores[name] = score_val
+                        scores[name] = total_score
                         
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
@@ -130,9 +130,9 @@ def main():
     if "teams" not in st.session_state:
         st.session_state.teams = load_teams(user_id)
 
-    # Load scores with proper relative-to-par values
+    # Load scores with total tournament values
     live_scores = get_masters_scores() or {
-        normalize_name("Scottie Scheffler"): -5,
+        normalize_name("Scottie Scheffler"): -7,
         normalize_name("Rory McIlroy"): -3
     }
 
@@ -146,13 +146,13 @@ def main():
         for golfer in golfers:
             normalized = normalize_name(golfer)
             score = live_scores.get(normalized, 0)
-            formatted = f"{score:+}" if score != 0 else "E"
+            formatted = f"{score:+}"  # Always show +/- including "+0"
             formatted_golfers.append(f"{golfer} ({formatted})")
         
         leaderboard.append({
             "Team": team,
             "Score": total_score,
-            "Display Score": f"{total_score:+}" if total_score != 0 else "E",
+            "Display Score": f"{total_score:+}",  # No "E" values
             "Golfers": ", ".join(formatted_golfers)
         })
 
