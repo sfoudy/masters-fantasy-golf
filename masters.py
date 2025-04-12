@@ -1,13 +1,13 @@
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 import unicodedata
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# Initialize Firebase
+# Initialize Firebase with timezone awareness
 if not firebase_admin._apps:
     try:
         firebase_config = dict(st.secrets["firebase"])
@@ -30,16 +30,16 @@ def normalize_name(name: str) -> str:
     return unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode().lower().strip()
 
 def get_user_id():
-    """Generate persistent user ID using modern query params"""
+    """Generate persistent user ID using UTC timestamps"""
     if 'user_id' not in st.session_state:
         user_id = st.query_params.get("user_id", None)
         if not user_id:
-            user_id = f"user_{datetime.now().timestamp()}"
+            user_id = f"user_{datetime.now(timezone.utc).timestamp()}"
             st.query_params["user_id"] = user_id
         st.session_state.user_id = user_id
     return st.session_state.user_id
 
-# Data operations
+# Data operations with UTC timezone
 def load_teams(user_id):
     try:
         doc_ref = db.collection("teams").document(user_id)
@@ -47,7 +47,8 @@ def load_teams(user_id):
         
         if doc.exists:
             data = doc.to_dict()
-            if datetime.now() > data['expiry']:
+            current_time = datetime.now(timezone.utc)
+            if current_time > data['expiry']:
                 doc_ref.delete()
                 return {}
             return data.get('teams', {})
@@ -58,7 +59,7 @@ def load_teams(user_id):
 
 def save_teams(user_id, teams):
     try:
-        expiry = datetime.now() + timedelta(days=2)
+        expiry = datetime.now(timezone.utc) + timedelta(days=2)
         doc_ref = db.collection("teams").document(user_id)
         doc_ref.set({
             'teams': teams,
@@ -69,7 +70,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Updated to show TOTAL tournament scores
+# Score fetching with totalToPar
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -84,16 +85,13 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Get TOTAL score relative to par for the tournament
+                        # Get total tournament score
                         total_score = player.get('totalToPar', player.get('scoreToPar', 'E'))
                         
-                        # Convert to integer (handles "E" as 0)
+                        # Convert to integer
                         if isinstance(total_score, str):
                             total_score = total_score.replace("E", "0").strip()
-                            try:
-                                total_score = int(total_score)
-                            except ValueError:
-                                total_score = 0
+                            total_score = int(total_score) if total_score else 0
                         else:
                             total_score = int(total_score)
                             
@@ -130,7 +128,7 @@ def main():
     if "teams" not in st.session_state:
         st.session_state.teams = load_teams(user_id)
 
-    # Load scores with total tournament values
+    # Load scores
     live_scores = get_masters_scores() or {
         normalize_name("Scottie Scheffler"): -7,
         normalize_name("Rory McIlroy"): -3
@@ -146,13 +144,13 @@ def main():
         for golfer in golfers:
             normalized = normalize_name(golfer)
             score = live_scores.get(normalized, 0)
-            formatted = f"{score:+}"  # Always show +/- including "+0"
+            formatted = f"{score:+}"  # Always show +/- notation
             formatted_golfers.append(f"{golfer} ({formatted})")
         
         leaderboard.append({
             "Team": team,
             "Score": total_score,
-            "Display Score": f"{total_score:+}",  # No "E" values
+            "Display Score": f"{total_score:+}",
             "Golfers": ", ".join(formatted_golfers)
         })
 
@@ -221,7 +219,7 @@ def main():
                 if save_teams(user_id, st.session_state.teams):
                     st.success(f"Team '{del_team}' removed!")
 
-    st.caption(f"Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
 if __name__ == "__main__":
     main()
