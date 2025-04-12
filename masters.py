@@ -97,7 +97,7 @@ def get_user_session():
 
 # Helper functions
 def normalize_name(name: str) -> str:
-    return name.strip().lower()
+    return unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode().lower().strip()
 
 def proper_case(name: str) -> str:
     return ' '.join(word.capitalize() for word in name.split())
@@ -132,7 +132,7 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Verified score extraction
+# Corrected score extraction
 @st.cache_data(ttl=120)
 def get_masters_scores():
     try:
@@ -146,8 +146,17 @@ def get_masters_scores():
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
-                        score = str(player.get('score', 'E')).strip()
-                        scores[name] = int(score) if score.replace('E', '0').isdigit() else 0
+                        
+                        # Get score from correct API field
+                        score = player.get('scoreToPar', player.get('totalToPar', 'E'))
+                        
+                        # Handle different data types and formats
+                        if isinstance(score, str):
+                            score = score.replace("E", "0").strip()
+                        score_val = int(score) if str(score).strip() != '' else 0
+                            
+                        scores[name] = score_val
+                        
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
@@ -186,18 +195,20 @@ def main():
     # Leaderboard calculation
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
-        valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
-        total_score = sum(live_scores[normalize_name(g)] for g in valid_golfers)
+        normalized_golfers = [normalize_name(g) for g in golfers]
+        total_score = sum(live_scores.get(g, 0) for g in normalized_golfers)
         
-        formatted_golfers = [
-            f"{proper_case(g)} ({live_scores[normalize_name(g)]:+})" 
-            for g in valid_golfers
-        ]
+        formatted_golfers = []
+        for golfer in golfers:
+            normalized = normalize_name(golfer)
+            score = live_scores.get(normalized, 0)
+            formatted = f"{score:+}" if score != 0 else "E"
+            formatted_golfers.append(f"{proper_case(golfer)} ({formatted})")
         
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score": f"{total_score:+}" if total_score != 0 else "E",
+            "Display Score": f"{total_score:+}",
             "Golfers": ", ".join(formatted_golfers)
         })
 
@@ -226,8 +237,7 @@ def main():
                 )
                 .set_properties(**{
                     'color': 'white',
-                    'border': '1px solid grey',
-                    'background-color': 'black'
+                    'border': '1px solid grey'
                 }, subset=["Score"])
                 .format({"Score": lambda x: f"{x:+}"})
                 .hide(axis="index")
