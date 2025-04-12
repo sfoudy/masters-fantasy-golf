@@ -164,6 +164,41 @@ def get_masters_scores():
         st.error(f"API Error: {str(e)}")
         return {}
 
+def display_leaderboard(leaderboard):
+    if leaderboard:
+        leaderboard_df = (
+            pd.DataFrame(leaderboard)
+            .sort_values("Score", ascending=True)
+            .reset_index(drop=True)
+        )
+        leaderboard_df.index += 1
+        
+        # Add ranking column for coloring
+        leaderboard_df['Rank'] = leaderboard_df.index
+        
+        try:
+            styled_df = (
+                leaderboard_df.style
+                .background_gradient(
+                    cmap='RdYlGn_r',
+                    subset=["Rank"],
+                    vmin=1,
+                    vmax=len(leaderboard_df)
+                )
+                .set_properties(**{
+                    'color': 'white',
+                    'border': '1px solid grey'
+                }, subset=["Score"])
+                .format({"Score": lambda x: f"{x:+}"})
+                .hide(axis="index")
+            )
+            # Hide rank column using correct method
+            styled_df = styled_df.hide(axis="columns", subset="Rank")
+            st.dataframe(styled_df, use_container_width=True)
+        except Exception as e:
+            st.dataframe(leaderboard_df[["Team", "Display Score", "Golfers"]], 
+                       use_container_width=True)
+
 # Streamlit app
 def main():
     st.set_page_config(
@@ -216,39 +251,7 @@ def main():
     st.title("🏌️‍♂️ Masters Fantasy Golf Tracker")
     st.header("📊 Fantasy Leaderboard")
     
-    if leaderboard:
-        leaderboard_df = (
-            pd.DataFrame(leaderboard)
-            .sort_values("Score", ascending=True)
-            .reset_index(drop=True)
-        )
-        leaderboard_df.index += 1
-        
-        try:
-            # Position-based coloring
-            leaderboard_df['Rank'] = leaderboard_df.index
-            styled_df = (
-                leaderboard_df.style
-                .background_gradient(
-                    cmap='RdYlGn_r',
-                    subset=["Rank"],
-                    vmin=1,
-                    vmax=len(leaderboard_df)
-                )
-                .set_properties(**{
-                    'color': 'white',
-                    'border': '1px solid grey'
-                }, subset=["Score"])
-                .format({"Score": lambda x: f"{x:+}"})
-                .hide(axis="index")
-                .hide(columns=["Rank"])
-            )
-            st.dataframe(styled_df, use_container_width=True)
-        except Exception as e:
-            st.dataframe(leaderboard_df[["Team", "Display Score", "Golfers"]], 
-                       use_container_width=True)
-    else:
-        st.warning("No teams or golfers assigned yet!")
+    display_leaderboard(leaderboard)
 
     # Team management
     st.header("🏌️ Assign Golfers to Teams")
