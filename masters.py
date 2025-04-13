@@ -243,11 +243,11 @@ def main():
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score": total_actual,
+            "Display Score (No Penalty)": total_actual,
             "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
 
-    st.title("🏌️♂️ Masters Fantasy Golf Tracker")
+    st.title("🏌️ Masters Fantasy Golf Tracker")
     st.header("📊 Fantasy Leaderboard")
     display_leaderboard(leaderboard)
 
