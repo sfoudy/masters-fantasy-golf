@@ -246,7 +246,7 @@ def main():
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score": total_actual,
+            "Display Score (No penalties)": total_actual,
             "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
 
