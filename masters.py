@@ -124,10 +124,9 @@ def get_masters_scores():
                         score_display = player.get('score', {}).get('displayValue', 'E')
                         status_type = player.get('status', {}).get('type', '').upper()
                         position = player.get('position', {}).get('displayValue', '').upper()
-                        score_to_par = player.get('scoreToPar', 1000)
                         
-                        # Convert score and set penalty
-                        if score_display == 'CUT' or score_to_par >= 1000:
+                        # Convert score
+                        if score_display == 'CUT':
                             actual_score = 0
                             penalty = 10
                         else:
@@ -211,11 +210,9 @@ def main():
             "Team": proper_case(team),
             "Score": total_actual + total_penalty,
             "Display Score": total_actual,
-            "Golfers": ", ".join([
-                f"{proper_case(g)} ({live_scores[normalize_name(g)]['actual']:+})" + 
-                " 🔴 (+10 cut penalty)" if live_scores[normalize_name(g)]['penalty'] > 0 else "" 
-                for g in valid_golfers
-            ])
+            "Golfers": ", ".join([f"{proper_case(g)} ({live_scores[normalize_name(g)]['actual']:+})" + 
+                                " 🔴 (+10 cut penalty)" if live_scores[normalize_name(g)]['penalty'] > 0 else "" 
+                                for g in valid_golfers])
         })
 
     st.title("🏌️♂️ Masters Fantasy Golf Tracker")
