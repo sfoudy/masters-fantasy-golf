@@ -112,6 +112,52 @@ def get_masters_scores():
         response.raise_for_status()
         data = response.json()
         
+        # List of players who missed the cut (normalized names)
+        missed_cut = {
+            normalize_name("Keegan Bradley"),
+            normalize_name("Russell Henley"),
+            normalize_name("Dustin Johnson"),
+            normalize_name("Chris Kirk"),
+            normalize_name("Bernhard Langer"),
+            normalize_name("Rafael Campos"),
+            normalize_name("Fred Couples"),
+            normalize_name("Tony Finau"),
+            normalize_name("Sergio Garcia"),
+            normalize_name("Justin Hastings"),
+            normalize_name("Joe Highsmith"),
+            normalize_name("Adam Schenk"),
+            normalize_name("Mike Weir"),
+            normalize_name("Billy Horschel"),
+            normalize_name("Brooks Koepka"),
+            normalize_name("Phil Mickelson"),
+            normalize_name("Adam Scott"),
+            normalize_name("Cameron Smith"),
+            normalize_name("Sepp Straka"),
+            normalize_name("Austin Eckroat"),
+            normalize_name("Nicolai Højgaard"),
+            normalize_name("Robert MacIntyre"),
+            normalize_name("Hiroshi Tai"),
+            normalize_name("Jhonattan Vegas"),
+            normalize_name("Kevin Yu"),
+            normalize_name("Christiaan Bezuidenhout"),
+            normalize_name("José María Olazábal"),
+            normalize_name("Cameron Young"),
+            normalize_name("Lucas Glover"),
+            normalize_name("Patton Kizzire"),
+            normalize_name("Taylor Pendrith"),
+            normalize_name("Will Zalatoris"),
+            normalize_name("Evan Beck"),
+            normalize_name("Cameron Davis"),
+            normalize_name("Thomas Detry"),
+            normalize_name("José Luis Ballester"),
+            normalize_name("Laurie Canter"),
+            normalize_name("Matthieu Pavon"),
+            normalize_name("Angel Cabrera"),
+            normalize_name("Noah Kent"),
+            normalize_name("Thriston Lawrence"),
+            normalize_name("Nick Dunlap")
+        }
+
         scores = {}
         for event in data.get('events', []):
             for competition in event.get('competitions', []):
@@ -124,16 +170,11 @@ def get_masters_scores():
                         score_str = str(player.get('score', 'E')).strip()
                         if score_str == 'E':
                             actual_score = 0
-                        elif score_str == 'CUT':
-                            actual_score = 0
                         else:
-                            actual_score = int(score_str)
+                            actual_score = int(score_str) if score_str not in ['CUT'] else 0
                         
-                        # Cut detection
-                        status = player.get('status', {}).get('type', '').upper()
-                        rounds_played = len(player.get('linescores', []))
-                        
-                        penalty = 10 if status == 'CUT' or rounds_played <= 2 else 0
+                        # Apply penalty if in missed_cut list
+                        penalty = 10 if name in missed_cut else 0
                         
                         scores[name] = {
                             'actual': actual_score,
@@ -145,14 +186,7 @@ def get_masters_scores():
         return scores
     except Exception as e:
         print(f"API Error: {str(e)}")
-        return {
-            normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
-            normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
-            normalize_name("Tiger Woods"): {'actual': 9, 'penalty': 10},
-            normalize_name("Noah Kent"): {'actual': 11, 'penalty': 10},
-            normalize_name("Ángel Cabrera"): {'actual': 11, 'penalty': 10},
-            normalize_name("Nick Dunlap"): {'actual': 17, 'penalty': 10}
-        }
+        return {}
 
 def display_leaderboard(leaderboard):
     if leaderboard:
@@ -190,14 +224,7 @@ def main():
             raise Exception("No scores received from API")
     except Exception as e:
         st.error(f"Using fallback data: {str(e)}")
-        live_scores = {
-            normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
-            normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
-            normalize_name("Tiger Woods"): {'actual': 9, 'penalty': 10},
-            normalize_name("Noah Kent"): {'actual': 11, 'penalty': 10},
-            normalize_name("Ángel Cabrera"): {'actual': 11, 'penalty': 10},
-            normalize_name("Nick Dunlap"): {'actual': 17, 'penalty': 10}
-        }
+        live_scores = {}
 
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
