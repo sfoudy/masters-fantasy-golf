@@ -234,7 +234,7 @@ def main():
         for golfer in valid_golfers:
             data = live_scores[normalize_name(golfer)]
             if data['penalty'] > 0:
-                total_score += 10  # Apply flat penalty
+                total_score += 10
                 display = f"{proper_case(golfer)} (+10) 🔴 (Actual: {data['actual']:+})"
             else:
                 total_score += data['actual']
@@ -246,7 +246,7 @@ def main():
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score (No Penalties)": total_actual,
+            "Display Score (No Penalties)": total_actual,  # Keep as number for correct sorting
             "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
 
