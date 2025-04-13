@@ -117,7 +117,11 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Enhanced cut detection
+                        # Score extraction
+                        score = str(player.get('score', 'E')).strip()
+                        actual_score = 0 if score == 'E' else int(score)
+                        
+                        # Cut detection logic
                         status = player.get('status', {})
                         position = player.get('position', {}).get('displayValue', '').lower()
                         score_to_par = player.get('scoreToPar', 1000)
@@ -129,9 +133,6 @@ def get_masters_scores():
                             'cut' in status.get('type', '').lower(),
                             'cut' in status.get('name', '').lower()
                         ])
-                        
-                        score = str(player.get('score', 'E')).strip()
-                        actual_score = 0 if score == 'E' else int(score)
                         
                         scores[name] = {
                             'actual': actual_score,
@@ -181,20 +182,18 @@ def main():
         if not live_scores:
             raise Exception("No scores received from API")
         
-        # Debug last 3 players
-        debug_players = list(live_scores.items())[-3:]
-        st.write("Debug - Last 3 Players Status:")
-        for name, data in debug_players:
-            st.write(f"{proper_case(name)}: Actual {data['actual']}, Penalty {data['penalty']}")
+        # Debug output
+        st.write("Last 3 Players Status:")
+        for name, data in list(live_scores.items())[-3:]:
+            st.write(f"{proper_case(name)}: {data['actual']:+} ({data['penalty']} penalty)")
             
     except Exception as e:
         st.error(f"Using fallback data: {str(e)}")
         live_scores = {
             normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
             normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
-            normalize_name("Noah Kent (Missed Cut)"): {'actual': 8, 'penalty': 10},
-            normalize_name("Ángel Cabrera (Missed Cut)"): {'actual': 9, 'penalty': 10},
-            normalize_name("Nick Dunlap (Missed Cut)"): {'actual': 7, 'penalty': 10}
+            normalize_name("Tiger Woods (Missed Cut)"): {'actual': 9, 'penalty': 10},
+            normalize_name("Jordan Spieth (Missed Cut)"): {'actual': 8, 'penalty': 10}
         }
 
     leaderboard = []
