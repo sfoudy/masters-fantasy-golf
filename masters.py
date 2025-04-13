@@ -121,7 +121,7 @@ def get_masters_scores():
                         score = str(player.get('score', 'E')).strip()
                         actual_score = 0 if score == 'E' else int(score)
                         
-                        # Accurate cut detection
+                        # Accurate cut detection logic
                         position = player.get('position', {}).get('displayValue', '').lower()
                         status = player.get('status', {})
                         score_to_par = player.get('scoreToPar', 1000)
