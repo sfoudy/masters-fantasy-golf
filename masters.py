@@ -120,17 +120,19 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Get rounds played and score to par
-                        linescores = player.get('linescores', [])
+                        # Score handling
+                        score_display = player.get('score', {}).get('displayValue', 'E')
+                        status_type = player.get('status', {}).get('type', '').upper()
+                        position = player.get('position', {}).get('displayValue', '').upper()
                         score_to_par = player.get('scoreToPar', 1000)
                         
-                        # Determine cut status
-                        if len(linescores) <= 2:  # Missed cut or withdrew early
-                            actual_score = score_to_par if score_to_par != 1000 else 0
+                        # Convert score and set penalty
+                        if score_display == 'CUT' or score_to_par >= 1000:
+                            actual_score = 0
                             penalty = 10
-                        else:  # Made cut
-                            actual_score = score_to_par
-                            penalty = 0
+                        else:
+                            actual_score = int(score_display) if score_display not in ['E', ''] else 0
+                            penalty = 10 if status_type == 'CUT' or 'CUT' in position else 0
                         
                         scores[name] = {
                             'actual': actual_score,
