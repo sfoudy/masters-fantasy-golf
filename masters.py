@@ -112,7 +112,6 @@ def get_masters_scores():
         response.raise_for_status()
         data = response.json()
         
-        # List of players who missed the cut (normalized names)
         missed_cut = {
             normalize_name("Keegan Bradley"),
             normalize_name("Russell Henley"),
@@ -166,14 +165,9 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Handle score conversion
                         score_str = str(player.get('score', 'E')).strip()
-                        if score_str == 'E':
-                            actual_score = 0
-                        else:
-                            actual_score = int(score_str) if score_str not in ['CUT'] else 0
+                        actual_score = int(score_str) if score_str not in ['E', 'CUT'] else 0
                         
-                        # Apply penalty if in missed_cut list
                         penalty = 10 if name in missed_cut else 0
                         
                         scores[name] = {
@@ -230,23 +224,25 @@ def main():
     for team, golfers in st.session_state.teams.items():
         valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
         
-        total_actual = sum(live_scores[normalize_name(g)]['actual'] for g in valid_golfers)
-        total_penalty = sum(live_scores[normalize_name(g)]['penalty'] for g in valid_golfers)
-        
+        total_score = 0
+        total_actual = 0
         formatted_golfers = []
+        
         for golfer in valid_golfers:
-            try:
-                data = live_scores[normalize_name(golfer)]
+            data = live_scores[normalize_name(golfer)]
+            if data['penalty'] > 0:
+                total_score += 10
+                display = f"{proper_case(golfer)} (+10) 🔴"
+            else:
+                total_score += data['actual']
                 display = f"{proper_case(golfer)} ({data['actual']:+})"
-                if data['penalty'] > 0:
-                    display += " 🔴 (+10 cut penalty)"
-                formatted_golfers.append(display)
-            except KeyError:
-                continue  # Skip invalid golfers
+            
+            total_actual += data['actual']
+            formatted_golfers.append(display)
         
         leaderboard.append({
             "Team": proper_case(team),
-            "Score": total_actual + total_penalty,
+            "Score": total_score,
             "Display Score": total_actual,
             "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
