@@ -208,17 +208,20 @@ def main():
         
         formatted_golfers = []
         for golfer in valid_golfers:
-            data = live_scores[normalize_name(golfer)]
-            display = f"{proper_case(golfer)} ({data['actual']:+})"
-            if data['penalty'] > 0:
-                display += " 🔴 (+10 cut penalty)"
-            formatted_golfers.append(display)
+            try:
+                data = live_scores[normalize_name(golfer)]
+                display = f"{proper_case(golfer)} ({data['actual']:+})"
+                if data['penalty'] > 0:
+                    display += " 🔴 (+10 cut penalty)"
+                formatted_golfers.append(display)
+            except KeyError:
+                continue  # Skip invalid golfers
         
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_actual + total_penalty,
             "Display Score": total_actual,
-            "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No golfers selected"
+            "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
 
     st.title("🏌️♂️ Masters Fantasy Golf Tracker")
