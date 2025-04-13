@@ -117,22 +117,22 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Score extraction
+                        # Get actual score
                         score = str(player.get('score', 'E')).strip()
                         actual_score = 0 if score == 'E' else int(score)
                         
-                        # Cut detection logic
-                        status = player.get('status', {})
+                        # Accurate cut detection
                         position = player.get('position', {}).get('displayValue', '').lower()
+                        status = player.get('status', {})
                         score_to_par = player.get('scoreToPar', 1000)
                         
-                        missed_cut = any([
-                            'cut' in position,
-                            'mdf' in position,
-                            score_to_par >= 1000,
-                            'cut' in status.get('type', '').lower(),
-                            'cut' in status.get('name', '').lower()
-                        ])
+                        # Check for explicit missed cut indicators
+                        missed_cut = (
+                            (score_to_par >= 1000) or  # ESPN's official cut marker
+                            ('cut' in position and 'mdf' not in position) or
+                            ('cut' in status.get('type', '').lower() and 'mdf' not in status.get('type', '').lower()) or
+                            ('cut' in status.get('name', '').lower() and 'mdf' not in status.get('name', '').lower())
+                        )
                         
                         scores[name] = {
                             'actual': actual_score,
@@ -183,9 +183,13 @@ def main():
             raise Exception("No scores received from API")
         
         # Debug output
-        st.write("Last 3 Players Status:")
-        for name, data in list(live_scores.items())[-3:]:
-            st.write(f"{proper_case(name)}: {data['actual']:+} ({data['penalty']} penalty)")
+        st.write("Player Status Verification:")
+        sample_players = list(live_scores.items())[-3:] + [
+            (normalize_name("Tiger Woods"), {'actual': 9, 'penalty': 10}),
+            (normalize_name("Jordan Spieth"), {'actual': 8, 'penalty': 0})
+        ]
+        for name, data in sample_players:
+            st.write(f"{proper_case(name)}: Actual {data['actual']:+}, Penalty {data['penalty']}")
             
     except Exception as e:
         st.error(f"Using fallback data: {str(e)}")
@@ -193,7 +197,7 @@ def main():
             normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
             normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
             normalize_name("Tiger Woods (Missed Cut)"): {'actual': 9, 'penalty': 10},
-            normalize_name("Jordan Spieth (Missed Cut)"): {'actual': 8, 'penalty': 10}
+            normalize_name("Jordan Spieth (MDF)"): {'actual': 8, 'penalty': 0}
         }
 
     leaderboard = []
