@@ -117,16 +117,15 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Extract score
+                        # Get actual score
                         score = str(player.get('score', 'E')).strip()
                         actual_score = 0 if score == 'E' else int(score)
                         
-                        # VERIFIED CUT DETECTION (from mock tests)
+                        # Determine cut status
                         status = player.get('status', {})
                         status_type = status.get('type', '').lower()
                         status_name = status.get('name', '').lower()
                         
-                        # Check both type and name fields for cut status
                         missed_cut = any([
                             'cut' in status_type,
                             'cut' in status_name,
@@ -141,14 +140,11 @@ def get_masters_scores():
                             'penalty': penalty
                         }
                         
-                        # Debug log
-                        st.toast(f"Processed {raw_name}: Actual {actual_score}, Penalty {penalty}", icon="⛳")
-                        
                     except Exception as e:
-                        st.warning(f"Error processing {raw_name}: {str(e)}")
+                        print(f"Error processing {raw_name}: {str(e)}")
         return scores
     except Exception as e:
-        st.error(f"API Error: {str(e)}")
+        print(f"API Error: {str(e)}")
         return {}
 
 def display_leaderboard(leaderboard):
@@ -161,7 +157,6 @@ def display_leaderboard(leaderboard):
             min_score = leaderboard_df['Score'].min()
             max_score = leaderboard_df['Score'].max()
             
-            # Handle uniform scores
             if min_score == max_score:
                 min_score -= 1
                 max_score += 1
@@ -183,17 +178,22 @@ def main():
     user_id = get_user_session()
     st.session_state.teams = load_teams(user_id) if "teams" not in st.session_state else st.session_state.teams
     
-    live_scores = get_masters_scores() or {
-        normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
-        normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
-        normalize_name("Ludvig Åberg"): {'actual': -4, 'penalty': 0}
-    }
+    try:
+        live_scores = get_masters_scores()
+        if not live_scores:
+            raise Exception("No scores received from API")
+    except Exception as e:
+        st.error(f"Using fallback data: {str(e)}")
+        live_scores = {
+            normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
+            normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
+            normalize_name("Ludvig Åberg"): {'actual': -4, 'penalty': 0}
+        }
 
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
         valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
         
-        # Calculate scores with penalty
         total_actual = sum(live_scores[normalize_name(g)]['actual'] for g in valid_golfers)
         total_penalty = sum(live_scores[normalize_name(g)]['penalty'] for g in valid_golfers)
         total_score = total_actual + total_penalty
