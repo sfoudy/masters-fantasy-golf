@@ -114,7 +114,46 @@ def get_masters_scores():
         
         missed_cut = {
             normalize_name("Keegan Bradley"),
-            # ... [rest of cut list] ...
+            normalize_name("Russell Henley"),
+            normalize_name("Dustin Johnson"),
+            normalize_name("Chris Kirk"),
+            normalize_name("Bernhard Langer"),
+            normalize_name("Rafael Campos"),
+            normalize_name("Fred Couples"),
+            normalize_name("Tony Finau"),
+            normalize_name("Sergio Garcia"),
+            normalize_name("Justin Hastings"),
+            normalize_name("Joe Highsmith"),
+            normalize_name("Adam Schenk"),
+            normalize_name("Mike Weir"),
+            normalize_name("Billy Horschel"),
+            normalize_name("Brooks Koepka"),
+            normalize_name("Phil Mickelson"),
+            normalize_name("Adam Scott"),
+            normalize_name("Cameron Smith"),
+            normalize_name("Sepp Straka"),
+            normalize_name("Austin Eckroat"),
+            normalize_name("Nicolai Højgaard"),
+            normalize_name("Robert MacIntyre"),
+            normalize_name("Hiroshi Tai"),
+            normalize_name("Jhonattan Vegas"),
+            normalize_name("Kevin Yu"),
+            normalize_name("Christiaan Bezuidenhout"),
+            normalize_name("José María Olazábal"),
+            normalize_name("Cameron Young"),
+            normalize_name("Lucas Glover"),
+            normalize_name("Patton Kizzire"),
+            normalize_name("Taylor Pendrith"),
+            normalize_name("Will Zalatoris"),
+            normalize_name("Evan Beck"),
+            normalize_name("Cameron Davis"),
+            normalize_name("Thomas Detry"),
+            normalize_name("José Luis Ballester"),
+            normalize_name("Laurie Canter"),
+            normalize_name("Matthieu Pavon"),
+            normalize_name("Angel Cabrera"),
+            normalize_name("Noah Kent"),
+            normalize_name("Thriston Lawrence"),
             normalize_name("Nick Dunlap")
         }
 
@@ -173,7 +212,7 @@ def main():
     
     user_id = get_user_session()
     
-    # Always load fresh teams for current user
+    # Load teams fresh for current user
     try:
         st.session_state.teams = load_teams(user_id)
     except:
@@ -241,7 +280,6 @@ def main():
     with st.sidebar:
         st.header("👥 Manage Teams")
         if st.button("🚪 Log Out"):
-            # Clear all user-specific session data
             keys_to_remove = ['user_id', 'teams']
             for key in keys_to_remove:
                 if key in st.session_state:
