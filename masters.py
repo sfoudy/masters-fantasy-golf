@@ -117,12 +117,13 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Get actual score and cut status
+                        # Get actual score
                         score = str(player.get('score', 'E')).strip()
                         actual_score = 0 if score == 'E' else int(score)
                         
                         # Determine cut status
-                        made_cut = player.get('status', {}).get('type', '') != 'cut'
+                        status_type = player.get('status', {}).get('type', '').lower()
+                        made_cut = status_type not in ['cut', 'mdf']
                         penalty = 0 if made_cut else 10
                         
                         scores[name] = {
@@ -135,11 +136,7 @@ def get_masters_scores():
         return scores
     except Exception as e:
         st.error(f"API Error: {str(e)}")
-        return {
-            normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
-            normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
-            normalize_name("Ludvig Åberg"): {'actual': -4, 'penalty': 0}
-        }
+        return {}
 
 def display_leaderboard(leaderboard):
     if leaderboard:
@@ -150,7 +147,6 @@ def display_leaderboard(leaderboard):
             leaderboard_df['Score'] = pd.to_numeric(leaderboard_df['Score'], errors='coerce')
             min_score, max_score = leaderboard_df['Score'].min(), leaderboard_df['Score'].max()
             
-            # Handle uniform scores
             if min_score == max_score:
                 min_score -= 1
                 max_score += 1
@@ -172,13 +168,16 @@ def main():
     user_id = get_user_session()
     st.session_state.teams = load_teams(user_id) if "teams" not in st.session_state else st.session_state.teams
     
-    live_scores = get_masters_scores()
+    live_scores = get_masters_scores() or {
+        normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
+        normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
+        normalize_name("Ludvig Åberg"): {'actual': -4, 'penalty': 0}
+    }
 
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
         valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
         
-        # Calculate scores with penalty
         total_actual = sum(live_scores[normalize_name(g)]['actual'] for g in valid_golfers)
         total_penalty = sum(live_scores[normalize_name(g)]['penalty'] for g in valid_golfers)
         total_score = total_actual + total_penalty
@@ -188,13 +187,13 @@ def main():
             data = live_scores[normalize_name(golfer)]
             display = f"{proper_case(golfer)} ({data['actual']:+})"
             if data['penalty'] > 0:
-                display += " 🔴"  # Red dot indicates cut penalty
+                display += " 🔴"
             formatted_golfers.append(display)
         
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score": total_actual,  # Show actual score without penalty
+            "Display Score": total_actual,
             "Golfers": ", ".join(formatted_golfers)
         })
 
