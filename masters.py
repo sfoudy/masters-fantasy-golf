@@ -121,13 +121,13 @@ def get_masters_scores():
                         score = str(player.get('score', 'E')).strip()
                         actual_score = 0 if score == 'E' else int(score)
                         
-                        # Determine cut status - new improved method
-                        status_type = player.get('status', {}).get('type', '')
-                        made_cut = status_type not in ['cut', 'mdf']  # CUT or Made Cut Did Not Finish
+                        # Determine cut status
+                        made_cut = player.get('status', {}).get('type', '') != 'cut'
+                        penalty = 0 if made_cut else 10
                         
                         scores[name] = {
                             'actual': actual_score,
-                            'penalty': 10 if not made_cut else 0
+                            'penalty': penalty
                         }
                         
                     except Exception as e:
@@ -149,16 +149,19 @@ def display_leaderboard(leaderboard):
         try:
             leaderboard_df['Score'] = pd.to_numeric(leaderboard_df['Score'], errors='coerce')
             min_score, max_score = leaderboard_df['Score'].min(), leaderboard_df['Score'].max()
-            min_score = min_score - 1 if min_score == max_score else min_score
-            max_score = max_score + 1 if min_score == max_score else max_score
+            
+            # Handle uniform scores
+            if min_score == max_score:
+                min_score -= 1
+                max_score += 1
 
-            st.dataframe(
+            styled_df = (
                 leaderboard_df.style
                 .background_gradient(cmap='RdYlGn_r', subset=["Score"], vmin=min_score, vmax=max_score)
                 .format({"Score": lambda x: f"{x:+}", "Display Score": lambda x: f"{x:+}"})
-                .hide(axis="index"),
-                use_container_width=True
+                .hide(axis="index")
             )
+            st.dataframe(styled_df, use_container_width=True)
         except Exception as e:
             st.dataframe(leaderboard_df[["Team", "Display Score", "Golfers"]], use_container_width=True)
 
@@ -185,7 +188,7 @@ def main():
             data = live_scores[normalize_name(golfer)]
             display = f"{proper_case(golfer)} ({data['actual']:+})"
             if data['penalty'] > 0:
-                display += " 🔴"  # Visual indicator for cut penalty
+                display += " 🔴"  # Red dot indicates cut penalty
             formatted_golfers.append(display)
         
         leaderboard.append({
