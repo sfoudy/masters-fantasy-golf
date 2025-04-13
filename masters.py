@@ -117,30 +117,21 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Get all relevant fields
-                        status = player.get('status', {})
-                        score_display = player.get('score', {}).get('displayValue', 'E')
-                        status_type = status.get('type', '').upper()
-                        position = player.get('position', {}).get('displayValue', '').upper()
-                        score_to_par = player.get('scoreToPar', 1000)
+                        # Direct cut detection from ESPN's status
+                        status_type = player.get('status', {}).get('type', '').upper()
+                        score = player.get('score', 'E')
                         
-                        # Determine actual score
-                        try:
-                            actual_score = int(score_display) if score_display not in ['E', 'CUT'] else 0
-                        except:
+                        # Convert score to integer
+                        if isinstance(score, str) and score.upper() == 'CUT':
                             actual_score = 0
-                        
-                        # Apply penalty if any cut indicator exists
-                        missed_cut = any([
-                            status_type == 'CUT',
-                            'CUT' in score_display.upper(),
-                            'CUT' in position,
-                            score_to_par >= 1000
-                        ])
+                            penalty = 10
+                        else:
+                            actual_score = int(score) if str(score).strip() not in ['E', ''] else 0
+                            penalty = 10 if status_type == 'CUT' else 0
                         
                         scores[name] = {
                             'actual': actual_score,
-                            'penalty': 10 if missed_cut else 0
+                            'penalty': penalty
                         }
                         
                     except Exception as e:
@@ -148,12 +139,7 @@ def get_masters_scores():
         return scores
     except Exception as e:
         print(f"API Error: {str(e)}")
-        return {
-            normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
-            normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
-            normalize_name("Tiger Woods"): {'actual': 9, 'penalty': 10},
-            normalize_name("Jordan Spieth"): {'actual': 8, 'penalty': 0}
-        }
+        return {}
 
 def display_leaderboard(leaderboard):
     if leaderboard:
@@ -205,7 +191,7 @@ def main():
         live_scores = {
             normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
             normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
-            normalize_name("Tiger Woods"): {'actual': 9, 'penalty': 10},
+            normalize_name("Tiger Woods (CUT)"): {'actual': 9, 'penalty': 10},
             normalize_name("Jordan Spieth"): {'actual': 8, 'penalty': 0}
         }
 
