@@ -89,7 +89,7 @@ def load_teams(user_id):
     try:
         doc_ref = db.collection("teams").document(user_id)
         doc = doc_ref.get()
-        return doc.to_dict().get('teams', {}) if doc.exists and datetime.now(timezone.utc) < doc.to_dict().get('expiry', datetime.min) else {}
+        return doc.to_dict().get('teams', {}) if doc.exists else {}
     except Exception as e:
         st.error(f"Database error: {str(e)}")
         return {}
@@ -98,36 +98,40 @@ def save_teams(user_id, teams):
     try:
         db.collection("teams").document(user_id).set({
             'teams': teams,
-            'expiry': datetime.now(timezone.utc) + timedelta(days=2)
+            'expiry': datetime.now(timezone.utc) + timedelta(days=7)
         })
         return True
     except Exception as e:
         st.error(f"Save failed: {str(e)}")
         return False
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=300)
 def get_masters_scores():
     try:
-        response = requests.get("https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard").json()
+        response = requests.get("https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard", timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
         scores = {}
-        for event in response.get('events', []):
+        for event in data.get('events', []):
             for competition in event.get('competitions', []):
                 for player in competition.get('competitors', []):
                     try:
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Direct cut detection from ESPN's status
+                        # Score handling
+                        score_display = player.get('score', {}).get('displayValue', 'E')
                         status_type = player.get('status', {}).get('type', '').upper()
-                        score = player.get('score', 'E')
+                        position = player.get('position', {}).get('displayValue', '').upper()
                         
-                        # Convert score to integer
-                        if isinstance(score, str) and score.upper() == 'CUT':
+                        # Convert score
+                        if score_display == 'CUT':
                             actual_score = 0
                             penalty = 10
                         else:
-                            actual_score = int(score) if str(score).strip() not in ['E', ''] else 0
-                            penalty = 10 if status_type == 'CUT' else 0
+                            actual_score = int(score_display) if score_display not in ['E', ''] else 0
+                            penalty = 10 if status_type == 'CUT' or 'CUT' in position else 0
                         
                         scores[name] = {
                             'actual': actual_score,
@@ -139,83 +143,76 @@ def get_masters_scores():
         return scores
     except Exception as e:
         print(f"API Error: {str(e)}")
-        return {}
+        return {
+            normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
+            normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
+            normalize_name("Tiger Woods"): {'actual': 9, 'penalty': 10},
+            normalize_name("Noah Kent"): {'actual': 11, 'penalty': 10},
+            normalize_name("Ángel Cabrera"): {'actual': 11, 'penalty': 10},
+            normalize_name("Nick Dunlap"): {'actual': 17, 'penalty': 10}
+        }
 
 def display_leaderboard(leaderboard):
     if leaderboard:
-        leaderboard_df = pd.DataFrame(leaderboard).sort_values("Score", ascending=True).reset_index(drop=True)
+        leaderboard_df = pd.DataFrame(leaderboard).sort_values("Score", ascending=True)
         leaderboard_df.index += 1
         
         try:
-            leaderboard_df['Score'] = pd.to_numeric(leaderboard_df['Score'], errors='coerce')
             min_score = leaderboard_df['Score'].min()
             max_score = leaderboard_df['Score'].max()
             
-            if min_score == max_score:
-                min_score -= 1
-                max_score += 1
-
             styled_df = (
                 leaderboard_df.style
-                .background_gradient(cmap='RdYlGn_r', subset=["Score"], vmin=min_score, vmax=max_score)
+                .background_gradient(cmap='RdYlGn_r', subset=["Score"], vmin=min_score-1, vmax=max_score+1)
                 .format({"Score": lambda x: f"{x:+}", "Display Score": lambda x: f"{x:+}"})
-                .hide(axis="index")
             )
             st.dataframe(styled_df, use_container_width=True)
         except Exception as e:
-            st.dataframe(leaderboard_df[["Team", "Display Score", "Golfers"]], use_container_width=True)
+            st.dataframe(leaderboard_df)
 
 def main():
     st.set_page_config(page_title="Masters Fantasy Golf Tracker", layout="wide")
-    st_autorefresh(interval=120000, key="auto_refresh")
+    st_autorefresh(interval=300000, key="auto_refresh")
     
     user_id = get_user_session()
-    st.session_state.teams = load_teams(user_id) if "teams" not in st.session_state else st.session_state.teams
+    
+    # Load teams with error recovery
+    if "teams" not in st.session_state:
+        try:
+            st.session_state.teams = load_teams(user_id)
+        except:
+            st.session_state.teams = {}
     
     try:
         live_scores = get_masters_scores()
         if not live_scores:
             raise Exception("No scores received from API")
-        
-        # Debug output
-        st.write("Player Status Verification:")
-        sample_players = list(live_scores.items())[-3:] + [
-            (normalize_name("Tiger Woods"), {'actual': 9, 'penalty': 10}),
-            (normalize_name("Jordan Spieth"), {'actual': 8, 'penalty': 0})
-        ]
-        for name, data in sample_players:
-            st.write(f"{proper_case(name)}: Actual {data['actual']:+}, Penalty {data['penalty']}")
-            
     except Exception as e:
         st.error(f"Using fallback data: {str(e)}")
         live_scores = {
             normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
             normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
-            normalize_name("Tiger Woods (CUT)"): {'actual': 9, 'penalty': 10},
-            normalize_name("Jordan Spieth"): {'actual': 8, 'penalty': 0}
+            normalize_name("Tiger Woods"): {'actual': 9, 'penalty': 10},
+            normalize_name("Noah Kent"): {'actual': 11, 'penalty': 10},
+            normalize_name("Ángel Cabrera"): {'actual': 11, 'penalty': 10},
+            normalize_name("Nick Dunlap"): {'actual': 17, 'penalty': 10}
         }
 
+    # Leaderboard calculation
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
         valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
         
         total_actual = sum(live_scores[normalize_name(g)]['actual'] for g in valid_golfers)
         total_penalty = sum(live_scores[normalize_name(g)]['penalty'] for g in valid_golfers)
-        total_score = total_actual + total_penalty
-        
-        formatted_golfers = []
-        for golfer in valid_golfers:
-            data = live_scores[normalize_name(golfer)]
-            display = f"{proper_case(golfer)} ({data['actual']:+})"
-            if data['penalty'] > 0:
-                display += " 🔴 (+10 cut penalty)"
-            formatted_golfers.append(display)
         
         leaderboard.append({
             "Team": proper_case(team),
-            "Score": total_score,
+            "Score": total_actual + total_penalty,
             "Display Score": total_actual,
-            "Golfers": ", ".join(formatted_golfers)
+            "Golfers": ", ".join([f"{proper_case(g)} ({live_scores[normalize_name(g)]['actual']:+})" + 
+                                " 🔴 (+10 cut penalty)" if live_scores[normalize_name(g)]['penalty'] > 0 else "" 
+                                for g in valid_golfers])
         })
 
     st.title("🏌️♂️ Masters Fantasy Golf Tracker")
@@ -224,6 +221,7 @@ def main():
 
     st.header("🏌️ Assign Golfers to Teams")
     valid_golfers = {k: v for k, v in live_scores.items()}
+    
     for team, golfers in st.session_state.teams.items():
         with st.form(key=f"{team}_form"):
             current = [proper_case(g) for g in golfers if normalize_name(g) in valid_golfers]
@@ -231,9 +229,9 @@ def main():
                 f"Select golfers for {team} (Max 4):",
                 options=[proper_case(g) for g in valid_golfers.keys()],
                 default=current,
-                key=f"select_{team}",
                 format_func=lambda x: f"{x} ({valid_golfers[normalize_name(x)]['actual']:+})"
             )
+            
             if st.form_submit_button("Save Selections"):
                 if len(selected) <= 4:
                     st.session_state.teams[team] = [normalize_name(g) for g in selected]
