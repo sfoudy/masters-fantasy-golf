@@ -117,13 +117,16 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Store both actual score and cut status
+                        # Get actual score and cut status
                         score = str(player.get('score', 'E')).strip()
                         actual_score = 0 if score == 'E' else int(score)
-                        made_cut = player.get('madeCut', True)
+                        
+                        # Determine cut status - new improved method
+                        status_type = player.get('status', {}).get('type', '')
+                        made_cut = status_type not in ['cut', 'mdf']  # CUT or Made Cut Did Not Finish
                         
                         scores[name] = {
-                            'actual_score': actual_score,
+                            'actual': actual_score,
                             'penalty': 10 if not made_cut else 0
                         }
                         
@@ -133,9 +136,9 @@ def get_masters_scores():
     except Exception as e:
         st.error(f"API Error: {str(e)}")
         return {
-            normalize_name("Bryson DeChambeau"): {'actual_score': -7, 'penalty': 0},
-            normalize_name("Scottie Scheffler"): {'actual_score': -5, 'penalty': 0},
-            normalize_name("Ludvig Åberg"): {'actual_score': -4, 'penalty': 0}
+            normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
+            normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
+            normalize_name("Ludvig Åberg"): {'actual': -4, 'penalty': 0}
         }
 
 def display_leaderboard(leaderboard):
@@ -173,17 +176,17 @@ def main():
         valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
         
         # Calculate scores with penalty
-        total_actual = sum(live_scores[normalize_name(g)]['actual_score'] for g in valid_golfers)
+        total_actual = sum(live_scores[normalize_name(g)]['actual'] for g in valid_golfers)
         total_penalty = sum(live_scores[normalize_name(g)]['penalty'] for g in valid_golfers)
         total_score = total_actual + total_penalty
         
         formatted_golfers = []
         for golfer in valid_golfers:
             data = live_scores[normalize_name(golfer)]
-            formatted = f"{proper_case(golfer)} ({data['actual_score']:+})"
+            display = f"{proper_case(golfer)} ({data['actual']:+})"
             if data['penalty'] > 0:
-                formatted += f" (+{data['penalty']} cut penalty)"
-            formatted_golfers.append(formatted)
+                display += " 🔴"  # Visual indicator for cut penalty
+            formatted_golfers.append(display)
         
         leaderboard.append({
             "Team": proper_case(team),
@@ -206,7 +209,7 @@ def main():
                 options=[proper_case(g) for g in valid_golfers.keys()],
                 default=current,
                 key=f"select_{team}",
-                format_func=lambda x: f"{x} ({valid_golfers[normalize_name(x)]['actual_score']:+})"
+                format_func=lambda x: f"{x} ({valid_golfers[normalize_name(x)]['actual']:+})"
             )
             if st.form_submit_button("Save Selections"):
                 if len(selected) <= 4:
