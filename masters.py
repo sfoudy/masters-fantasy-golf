@@ -196,7 +196,7 @@ def display_leaderboard(leaderboard):
                 .background_gradient(cmap='RdYlGn_r', subset=["Score"], vmin=min_score-1, vmax=max_score+1)
                 .format({
                     "Score": lambda x: f"{x:+}",
-                    "Display Score": lambda x: f"{x:+}"
+                    "Display Score (No Penalty)": lambda x: f"{x:+}"
                 })
             )
             st.dataframe(styled_df, use_container_width=True)
@@ -246,7 +246,7 @@ def main():
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score": total_actual,  # Keep as number for correct sorting
+            "Display Score (No Penalty)": total_actual,  # Keep as number for correct sorting
             "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
 
