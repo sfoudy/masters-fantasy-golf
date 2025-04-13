@@ -121,8 +121,10 @@ def get_masters_scores():
                         name = normalize_name(raw_name)
                         
                         # Handle score conversion
-                        score_str = player.get('score', 'E').strip()
+                        score_str = str(player.get('score', 'E')).strip()
                         if score_str == 'E':
+                            actual_score = 0
+                        elif score_str == 'CUT':
                             actual_score = 0
                         else:
                             actual_score = int(score_str)
@@ -204,15 +206,19 @@ def main():
         total_actual = sum(live_scores[normalize_name(g)]['actual'] for g in valid_golfers)
         total_penalty = sum(live_scores[normalize_name(g)]['penalty'] for g in valid_golfers)
         
+        formatted_golfers = []
+        for golfer in valid_golfers:
+            data = live_scores[normalize_name(golfer)]
+            display = f"{proper_case(golfer)} ({data['actual']:+})"
+            if data['penalty'] > 0:
+                display += " 🔴 (+10 cut penalty)"
+            formatted_golfers.append(display)
+        
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_actual + total_penalty,
             "Display Score": total_actual,
-            "Golfers": ", ".join([
-                f"{proper_case(g)} ({live_scores[normalize_name(g)]['actual']:+})" + 
-                " 🔴 (+10 cut penalty)" if live_scores[normalize_name(g)]['penalty'] > 0 else "" 
-                for g in valid_golfers
-            ])
+            "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No golfers selected"
         })
 
     st.title("🏌️♂️ Masters Fantasy Golf Tracker")
