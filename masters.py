@@ -115,14 +115,28 @@ def get_masters_scores():
                 for player in competition.get('competitors', []):
                     try:
                         raw_name = player['athlete']['displayName']
+                        name = normalize_name(raw_name)
+                        
+                        # Extract score and cut status
                         score = str(player.get('score', 'E')).strip()
-                        scores[normalize_name(raw_name)] = 0 if score == 'E' else int(score)
+                        score_val = 0 if score == 'E' else int(score)
+                        
+                        # Add +10 penalty for missed cut
+                        if not player.get('madeCut', True):  # Default to True if field missing
+                            score_val += 10
+                            
+                        scores[name] = score_val
+                        
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
         return scores
     except Exception as e:
         st.error(f"API Error: {str(e)}")
-        return {}
+        return {
+            normalize_name("Bryson DeChambeau"): -7,
+            normalize_name("Scottie Scheffler"): -5,
+            normalize_name("Ludvig Åberg"): -4
+        }
 
 def display_leaderboard(leaderboard):
     if leaderboard:
@@ -152,11 +166,7 @@ def main():
     user_id = get_user_session()
     st.session_state.teams = load_teams(user_id) if "teams" not in st.session_state else st.session_state.teams
     
-    live_scores = get_masters_scores() or {
-        normalize_name("Bryson DeChambeau"): -7,
-        normalize_name("Scottie Scheffler"): -5,
-        normalize_name("Ludvig Åberg"): -4
-    }
+    live_scores = get_masters_scores()
 
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
@@ -169,7 +179,7 @@ def main():
             "Golfers": ", ".join([f"{proper_case(g)} ({live_scores[normalize_name(g)]:+})" for g in valid_golfers])
         })
 
-    st.title("🏌️‍♂️ Masters Fantasy Golf Tracker")
+    st.title("🏌️♂️ Masters Fantasy Golf Tracker")
     st.header("📊 Fantasy Leaderboard")
     display_leaderboard(leaderboard)
 
