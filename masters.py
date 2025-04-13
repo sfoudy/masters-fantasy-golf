@@ -250,7 +250,7 @@ def main():
             "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
 
-    st.title("🏌️♂️ Masters Fantasy Golf Tracker")
+    st.title("🏌️ Masters Fantasy Golf Tracker")
     st.header("📊 Fantasy Leaderboard")
     display_leaderboard(leaderboard)
 
