@@ -117,29 +117,25 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Extract score
+                        # Enhanced cut detection
+                        status = player.get('status', {})
+                        position = player.get('position', {}).get('displayValue', '').lower()
+                        score_to_par = player.get('scoreToPar', 1000)
+                        
+                        missed_cut = any([
+                            'cut' in position,
+                            'mdf' in position,
+                            score_to_par >= 1000,
+                            'cut' in status.get('type', '').lower(),
+                            'cut' in status.get('name', '').lower()
+                        ])
+                        
                         score = str(player.get('score', 'E')).strip()
                         actual_score = 0 if score == 'E' else int(score)
                         
-                        # Enhanced cut detection with debug logging
-                        status = player.get('status', {})
-                        status_type = status.get('type', '').lower()
-                        status_name = status.get('name', '').lower()
-                        
-                        missed_cut = any([
-                            'cut' in status_type,
-                            'cut' in status_name,
-                            'mdf' in status_type,
-                            'mdf' in status_name,
-                            'missed cut' in status_type,
-                            'missed cut' in status_name
-                        ])
-                        
-                        penalty = 10 if missed_cut else 0
-                        
                         scores[name] = {
                             'actual': actual_score,
-                            'penalty': penalty
+                            'penalty': 10 if missed_cut else 0
                         }
                         
                     except Exception as e:
@@ -185,9 +181,9 @@ def main():
         if not live_scores:
             raise Exception("No scores received from API")
         
-        # Debug: Show first 3 players' status
-        debug_players = list(live_scores.items())[:3]
-        st.write("Debug - Sample Player Statuses:")
+        # Debug last 3 players
+        debug_players = list(live_scores.items())[-3:]
+        st.write("Debug - Last 3 Players Status:")
         for name, data in debug_players:
             st.write(f"{proper_case(name)}: Actual {data['actual']}, Penalty {data['penalty']}")
             
@@ -196,7 +192,9 @@ def main():
         live_scores = {
             normalize_name("Bryson DeChambeau"): {'actual': -7, 'penalty': 0},
             normalize_name("Scottie Scheffler"): {'actual': -5, 'penalty': 0},
-            normalize_name("Test Player (Missed Cut)"): {'actual': 2, 'penalty': 10}  # Test entry
+            normalize_name("Noah Kent (Missed Cut)"): {'actual': 8, 'penalty': 10},
+            normalize_name("Ángel Cabrera (Missed Cut)"): {'actual': 9, 'penalty': 10},
+            normalize_name("Nick Dunlap (Missed Cut)"): {'actual': 7, 'penalty': 10}
         }
 
     leaderboard = []
