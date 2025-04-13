@@ -114,7 +114,46 @@ def get_masters_scores():
         
         missed_cut = {
             normalize_name("Keegan Bradley"),
-            # ... [rest of cut list] ...
+            normalize_name("Russell Henley"),
+            normalize_name("Dustin Johnson"),
+            normalize_name("Chris Kirk"),
+            normalize_name("Bernhard Langer"),
+            normalize_name("Rafael Campos"),
+            normalize_name("Fred Couples"),
+            normalize_name("Tony Finau"),
+            normalize_name("Sergio Garcia"),
+            normalize_name("Justin Hastings"),
+            normalize_name("Joe Highsmith"),
+            normalize_name("Adam Schenk"),
+            normalize_name("Mike Weir"),
+            normalize_name("Billy Horschel"),
+            normalize_name("Brooks Koepka"),
+            normalize_name("Phil Mickelson"),
+            normalize_name("Adam Scott"),
+            normalize_name("Cameron Smith"),
+            normalize_name("Sepp Straka"),
+            normalize_name("Austin Eckroat"),
+            normalize_name("Nicolai Højgaard"),
+            normalize_name("Robert MacIntyre"),
+            normalize_name("Hiroshi Tai"),
+            normalize_name("Jhonattan Vegas"),
+            normalize_name("Kevin Yu"),
+            normalize_name("Christiaan Bezuidenhout"),
+            normalize_name("José María Olazábal"),
+            normalize_name("Cameron Young"),
+            normalize_name("Lucas Glover"),
+            normalize_name("Patton Kizzire"),
+            normalize_name("Taylor Pendrith"),
+            normalize_name("Will Zalatoris"),
+            normalize_name("Evan Beck"),
+            normalize_name("Cameron Davis"),
+            normalize_name("Thomas Detry"),
+            normalize_name("José Luis Ballester"),
+            normalize_name("Laurie Canter"),
+            normalize_name("Matthieu Pavon"),
+            normalize_name("Angel Cabrera"),
+            normalize_name("Noah Kent"),
+            normalize_name("Thriston Lawrence"),
             normalize_name("Nick Dunlap")
         }
 
@@ -149,10 +188,6 @@ def display_leaderboard(leaderboard):
         leaderboard_df.index += 1
         
         try:
-            # Convert to numeric for proper sorting
-            leaderboard_df['Score'] = pd.to_numeric(leaderboard_df['Score'])
-            leaderboard_df['Display Score'] = pd.to_numeric(leaderboard_df['Display Score'])
-            
             min_score = leaderboard_df['Score'].min()
             max_score = leaderboard_df['Score'].max()
             
@@ -211,11 +246,11 @@ def main():
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score": total_actual,  # Numeric value for sorting
+            "Display Score": total_actual,  # Keep as number for correct sorting
             "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
 
-    st.title("🏌️ Masters Fantasy Golf Tracker")
+    st.title("🏌️♂️ Masters Fantasy Golf Tracker")
     st.header("📊 Fantasy Leaderboard")
     display_leaderboard(leaderboard)
 
