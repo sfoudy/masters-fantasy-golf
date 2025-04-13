@@ -194,7 +194,10 @@ def display_leaderboard(leaderboard):
             styled_df = (
                 leaderboard_df.style
                 .background_gradient(cmap='RdYlGn_r', subset=["Score"], vmin=min_score-1, vmax=max_score+1)
-                .format({"Score": lambda x: f"{x:+}", "Display Score": lambda x: f"{x:+}"})
+                .format({
+                    "Score": lambda x: f"{x:+}",
+                    "Display Score": lambda x: f"{x:+}"
+                })
             )
             st.dataframe(styled_df, use_container_width=True)
         except Exception as e:
@@ -232,7 +235,7 @@ def main():
             data = live_scores[normalize_name(golfer)]
             if data['penalty'] > 0:
                 total_score += 10  # Apply flat penalty
-                display = f"{proper_case(golfer)} (+10) 🔴"
+                display = f"{proper_case(golfer)} (+10) 🔴 (Actual: {data['actual']:+})"
             else:
                 total_score += data['actual']
                 display = f"{proper_case(golfer)} ({data['actual']:+})"
@@ -243,11 +246,11 @@ def main():
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score (No Penalty)": total_actual,
+            "Display Score": total_actual,
             "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
 
-    st.title("🏌️ Masters Fantasy Golf Tracker")
+    st.title("🏌️♂️ Masters Fantasy Golf Tracker")
     st.header("📊 Fantasy Leaderboard")
     display_leaderboard(leaderboard)
 
