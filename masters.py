@@ -117,15 +117,15 @@ def get_masters_scores():
                         raw_name = player['athlete']['displayName']
                         name = normalize_name(raw_name)
                         
-                        # Extract score and cut status
+                        # Store both actual score and cut status
                         score = str(player.get('score', 'E')).strip()
-                        score_val = 0 if score == 'E' else int(score)
+                        actual_score = 0 if score == 'E' else int(score)
+                        made_cut = player.get('madeCut', True)
                         
-                        # Add +10 penalty for missed cut
-                        if not player.get('madeCut', True):  # Default to True if field missing
-                            score_val += 10
-                            
-                        scores[name] = score_val
+                        scores[name] = {
+                            'actual_score': actual_score,
+                            'penalty': 10 if not made_cut else 0
+                        }
                         
                     except Exception as e:
                         st.warning(f"Error processing {raw_name}: {str(e)}")
@@ -133,9 +133,9 @@ def get_masters_scores():
     except Exception as e:
         st.error(f"API Error: {str(e)}")
         return {
-            normalize_name("Bryson DeChambeau"): -7,
-            normalize_name("Scottie Scheffler"): -5,
-            normalize_name("Ludvig Åberg"): -4
+            normalize_name("Bryson DeChambeau"): {'actual_score': -7, 'penalty': 0},
+            normalize_name("Scottie Scheffler"): {'actual_score': -5, 'penalty': 0},
+            normalize_name("Ludvig Åberg"): {'actual_score': -4, 'penalty': 0}
         }
 
 def display_leaderboard(leaderboard):
@@ -152,7 +152,7 @@ def display_leaderboard(leaderboard):
             st.dataframe(
                 leaderboard_df.style
                 .background_gradient(cmap='RdYlGn_r', subset=["Score"], vmin=min_score, vmax=max_score)
-                .format({"Score": lambda x: f"{x:+}"})
+                .format({"Score": lambda x: f"{x:+}", "Display Score": lambda x: f"{x:+}"})
                 .hide(axis="index"),
                 use_container_width=True
             )
@@ -171,12 +171,25 @@ def main():
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
         valid_golfers = [g for g in golfers if normalize_name(g) in live_scores]
-        total_score = sum(live_scores[normalize_name(g)] for g in valid_golfers)
+        
+        # Calculate scores with penalty
+        total_actual = sum(live_scores[normalize_name(g)]['actual_score'] for g in valid_golfers)
+        total_penalty = sum(live_scores[normalize_name(g)]['penalty'] for g in valid_golfers)
+        total_score = total_actual + total_penalty
+        
+        formatted_golfers = []
+        for golfer in valid_golfers:
+            data = live_scores[normalize_name(golfer)]
+            formatted = f"{proper_case(golfer)} ({data['actual_score']:+})"
+            if data['penalty'] > 0:
+                formatted += f" (+{data['penalty']} cut penalty)"
+            formatted_golfers.append(formatted)
+        
         leaderboard.append({
             "Team": proper_case(team),
             "Score": total_score,
-            "Display Score": f"{total_score:+}",
-            "Golfers": ", ".join([f"{proper_case(g)} ({live_scores[normalize_name(g)]:+})" for g in valid_golfers])
+            "Display Score": total_actual,  # Show actual score without penalty
+            "Golfers": ", ".join(formatted_golfers)
         })
 
     st.title("🏌️♂️ Masters Fantasy Golf Tracker")
@@ -193,7 +206,7 @@ def main():
                 options=[proper_case(g) for g in valid_golfers.keys()],
                 default=current,
                 key=f"select_{team}",
-                format_func=lambda x: f"{x} ({valid_golfers[normalize_name(x)]:+})"
+                format_func=lambda x: f"{x} ({valid_golfers[normalize_name(x)]['actual_score']:+})"
             )
             if st.form_submit_button("Save Selections"):
                 if len(selected) <= 4:
