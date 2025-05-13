@@ -105,29 +105,20 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-@st.cache_data(ttl=300)
 def get_pga_scores():
     try:
-        url = "https://www.espn.com/golf/leaderboard/_/tournamentId/401703509"
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/125.0.0.0 Safari/537.36"
-            )
-        }
-        response = requests.get(url, headers=headers, timeout=10)
+        url = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard"
+        params = {"tournamentId": "401703509"}
+        response = requests.get(url, params=params)
         response.raise_for_status()
-        # Use StringIO to avoid deprecation warnings
-        from io import StringIO
-        tables = pd.read_html(StringIO(response.text))
-        leaderboard = tables[-1]  # ESPN: last table is the best formatted[3][6]
+        data = response.json()
+        players = data['leaders'] if 'leaders' in data else data['athletes']
         scores = {}
-        for _, row in leaderboard.iterrows():
-            raw_name = row['PLAYER']
-            name = normalize_name(raw_name)
-            score_str = str(row['SCORE']).strip()
-            # Handle 'E', 'CUT', 'WD', 'DQ'
+        for player in players:
+            # player['athlete']['displayName'] for full name, player['score'] for score
+            name = player['athlete']['displayName']
+            norm_name = normalize_name(name)
+            score_str = str(player['score']).strip()
             if score_str == 'E':
                 actual_score = 0
             elif score_str in ['CUT', 'WD', 'DQ']:
@@ -138,13 +129,14 @@ def get_pga_scores():
                 except ValueError:
                     actual_score = 0
             penalty = 10 if score_str in ['CUT', 'WD', 'DQ'] else 0
-            scores[name] = {
+            scores[norm_name] = {
                 'actual': actual_score,
-                'penalty': penalty
+                'penalty': penalty,
+                'display': score_str
             }
         return scores
     except Exception as e:
-        print(f"PGA Leaderboard Error: {str(e)}")
+        print(f"PGA API Error: {str(e)}")
         return {}
 
 
