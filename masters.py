@@ -110,14 +110,23 @@ def get_pga_scores():
     try:
         url = "https://www.espn.com/golf/leaderboard/_/tournamentId/401703509"
         tables = pd.read_html(url)
-        leaderboard = tables[0]
-        leaderboard.columns = [col.strip() for col in leaderboard.columns]
+        # Find the table with 'PLAYER' in the first row or column names
+        leaderboard = None
+        for t in tables:
+            if 'PLAYER' in t.columns or (t.shape[0] > 0 and 'PLAYER' in t.iloc[0].values):
+                leaderboard = t
+                break
+        if leaderboard is None:
+            raise Exception("Leaderboard table not found")
+        # If 'PLAYER' is not a column but in the first row, set headers
+        if 'PLAYER' not in leaderboard.columns and 'PLAYER' in leaderboard.iloc[0].values:
+            leaderboard.columns = leaderboard.iloc[0]
+            leaderboard = leaderboard[1:]
+        leaderboard = leaderboard.reset_index(drop=True)
         scores = {}
         for _, row in leaderboard.iterrows():
-            raw_name = row['PLAYER']
-            name = normalize_name(raw_name)
+            name = normalize_name(row['PLAYER'])
             score_str = str(row['SCORE']).strip()
-            # Handle 'E', 'CUT', 'WD', 'DQ' and numeric scores
             try:
                 actual_score = int(score_str) if score_str not in ['E', 'CUT', 'WD', 'DQ'] else 0
             except ValueError:
@@ -125,7 +134,8 @@ def get_pga_scores():
             penalty = 10 if score_str in ['CUT', 'WD', 'DQ'] else 0
             scores[name] = {
                 'actual': actual_score,
-                'penalty': penalty
+                'penalty': penalty,
+                'display': score_str
             }
         return scores
     except Exception as e:
