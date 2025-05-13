@@ -210,16 +210,13 @@ def main():
         norm = normalize_name(row['player_name'])
         name_map[norm] = proper_case(row['player_name'])
 
-    # --- Team Assignment Section FIRST ---
     st.header("🏌️ Assign Golfers to Teams")
     valid_golfers = {k: v for k, v in live_scores.items()}
     reverse_name_map = {v: k for k, v in name_map.items()}
     
     for team, golfers in st.session_state.teams.items():
         with st.form(key=f"{team}_form"):
-            # Display current golfers with spaces/case
             current = [name_map[g] for g in golfers if g in name_map]
-            # All options as proper-case names
             options = [name_map[g] for g in valid_golfers.keys() if g in name_map]
             selected = st.multiselect(
                 f"Select golfers for {team} (Max 4):",
@@ -228,17 +225,15 @@ def main():
                 format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['actual']:+})"
             )
 
-            if len(selected) > 4:
+            save_disabled = len(selected) > 4
+            if save_disabled:
                 st.warning("You can select a maximum of 4 golfers.")
 
-            if st.form_submit_button("Save Selections"):
-                if len(selected) <= 4:
-                    st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
-                    save_teams(user_id, st.session_state.teams)
-                else:
-                    st.error("Maximum 4 golfers per team! Please remove some selections.")
+            if st.form_submit_button("Save Selections", disabled=save_disabled):
+                st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
+                save_teams(user_id, st.session_state.teams)
 
-    # --- Leaderboard Section AFTER Team Assignment ---
+    # --- Leaderboard Section ---
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
         valid_golfers_list = [g for g in golfers if normalize_name(g) in live_scores]
@@ -269,7 +264,6 @@ def main():
     st.header("📊 Fantasy Leaderboard")
     display_leaderboard(leaderboard)
 
-    # Rest of your code (sidebar, etc.)
     with st.sidebar:
         st.header("👥 Manage Teams")
         if st.button("🚪 Log Out"):
@@ -292,6 +286,7 @@ def main():
                 save_teams(user_id, st.session_state.teams)
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
 
 if __name__ == "__main__":
     main()
