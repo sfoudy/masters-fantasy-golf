@@ -212,26 +212,26 @@ def main():
 
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
-    with st.form(key=f"{team}_form"):
-        # Display current golfers with spaces/case
-        current = [name_map[g] for g in golfers if g in name_map]
-        options = [name_map[g] for g in valid_golfers.keys() if g in name_map]
-        selected = st.multiselect(
-            f"Select golfers for {team} (Max 4):",
-            options=options,
-            default=current,
-            format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['actual']:+})"
-        )
-
-        if len(selected) > 4:
-            st.warning("You can select a maximum of 4 golfers.")
-
-        if st.form_submit_button("Save Selections"):
-            if len(selected) <= 4:
-                st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
-                save_teams(user_id, st.session_state.teams)
-            else:
-                st.error("Maximum 4 golfers per team! Please remove some selections.")
+        with st.form(key=f"{team}_form"):
+            # Display current golfers with spaces/case
+            current = [name_map[g] for g in golfers if g in name_map]
+            options = [name_map[g] for g in valid_golfers.keys() if g in name_map]
+            selected = st.multiselect(
+                f"Select golfers for {team} (Max 4):",
+                options=options,
+                default=current,
+                format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['actual']:+})"
+            )
+    
+            if len(selected) > 4:
+                st.warning("You can select a maximum of 4 golfers.")
+    
+            if st.form_submit_button("Save Selections"):
+                if len(selected) <= 4:
+                    st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
+                    save_teams(user_id, st.session_state.teams)
+                else:
+                    st.error("Maximum 4 golfers per team! Please remove some selections.")
 
 
     st.header("📊 Fantasy Leaderboard")
