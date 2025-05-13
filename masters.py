@@ -170,6 +170,17 @@ def display_leaderboard(leaderboard):
             st.dataframe(leaderboard_df)
 
 def main():
+
+
+url = "https://www.espn.com/golf/leaderboard/_/tournamentId/401703509"
+tables = pd.read_html(url)
+print(f"Number of tables found: {len(tables)}")
+if tables:
+    print("Columns:", tables[0].columns)
+    print(tables[0].head())
+else:
+    print("No tables found.")
+    
     st.set_page_config(page_title="Masters Fantasy Golf Tracker", layout="wide")
     st_autorefresh(interval=300000, key="auto_refresh")
     
