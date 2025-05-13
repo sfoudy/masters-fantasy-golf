@@ -210,33 +210,7 @@ def main():
         norm = normalize_name(row['player_name'])
         name_map[norm] = proper_case(row['player_name'])
 
-    leaderboard = []
-    for team, golfers in st.session_state.teams.items():
-        with st.form(key=f"{team}_form"):
-            # Display current golfers with spaces/case
-            current = [name_map[g] for g in golfers if g in name_map]
-            options = [name_map[g] for g in valid_golfers.keys() if g in name_map]
-            selected = st.multiselect(
-                f"Select golfers for {team} (Max 4):",
-                options=options,
-                default=current,
-                format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['actual']:+})"
-            )
-    
-            if len(selected) > 4:
-                st.warning("You can select a maximum of 4 golfers.")
-    
-            if st.form_submit_button("Save Selections"):
-                if len(selected) <= 4:
-                    st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
-                    save_teams(user_id, st.session_state.teams)
-                else:
-                    st.error("Maximum 4 golfers per team! Please remove some selections.")
-
-
-    st.header("📊 Fantasy Leaderboard")
-    display_leaderboard(leaderboard)
-
+    # --- Team Assignment Section FIRST ---
     st.header("🏌️ Assign Golfers to Teams")
     valid_golfers = {k: v for k, v in live_scores.items()}
     reverse_name_map = {v: k for k, v in name_map.items()}
@@ -253,14 +227,49 @@ def main():
                 default=current,
                 format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['actual']:+})"
             )
-            
+
+            if len(selected) > 4:
+                st.warning("You can select a maximum of 4 golfers.")
+
             if st.form_submit_button("Save Selections"):
                 if len(selected) <= 4:
                     st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
                     save_teams(user_id, st.session_state.teams)
                 else:
-                    st.error("Maximum 4 golfers per team!")
+                    st.error("Maximum 4 golfers per team! Please remove some selections.")
 
+    # --- Leaderboard Section AFTER Team Assignment ---
+    leaderboard = []
+    for team, golfers in st.session_state.teams.items():
+        valid_golfers_list = [g for g in golfers if normalize_name(g) in live_scores]
+        
+        total_score = 0
+        total_actual = 0
+        formatted_golfers = []
+        
+        for golfer in valid_golfers_list:
+            data = live_scores[normalize_name(golfer)]
+            if data['penalty'] > 0:
+                total_score += 10
+                display = f"{proper_case(golfer)} (+10) 🔴 (Actual: {data['actual']:+})"
+            else:
+                total_score += data['actual']
+                display = f"{proper_case(golfer)} ({data['actual']:+})"
+            
+            total_actual += data['actual']
+            formatted_golfers.append(display)
+        
+        leaderboard.append({
+            "Team": proper_case(team),
+            "Score": total_score,
+            "Display Score (No Penalty)": total_actual,
+            "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
+        })
+
+    st.header("📊 Fantasy Leaderboard")
+    display_leaderboard(leaderboard)
+
+    # Rest of your code (sidebar, etc.)
     with st.sidebar:
         st.header("👥 Manage Teams")
         if st.button("🚪 Log Out"):
@@ -283,6 +292,6 @@ def main():
                 save_teams(user_id, st.session_state.teams)
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
 if __name__ == "__main__":
     main()
-
