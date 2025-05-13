@@ -105,32 +105,24 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-@st.cache_data(ttl=300)
 def get_pga_scores():
     try:
         url = "https://www.espn.com/golf/leaderboard/_/tournamentId/401703509"
         tables = pd.read_html(url)
-        # Find the table with 'PLAYER' in the first row or column names
-        leaderboard = None
-        for t in tables:
-            if 'PLAYER' in t.columns or (t.shape[0] > 0 and 'PLAYER' in t.iloc[0].values):
-                leaderboard = t
-                break
-        if leaderboard is None:
-            raise Exception("Leaderboard table not found")
-        # If 'PLAYER' is not a column but in the first row, set headers
-        if 'PLAYER' not in leaderboard.columns and 'PLAYER' in leaderboard.iloc[0].values:
-            leaderboard.columns = leaderboard.iloc[0]
-            leaderboard = leaderboard[1:]
-        leaderboard = leaderboard.reset_index(drop=True)
+        leaderboard = tables[0]  # Only one table present
         scores = {}
         for _, row in leaderboard.iterrows():
-            name = normalize_name(row['PLAYER'])
+            player = row['PLAYER']
+            name = normalize_name(player)
             score_str = str(row['SCORE']).strip()
-            try:
-                actual_score = int(score_str) if score_str not in ['E', 'CUT', 'WD', 'DQ'] else 0
-            except ValueError:
+            # Convert 'E' to 0, handle 'CUT', 'WD', 'DQ' as penalty (example: +10)
+            if score_str == 'E':
                 actual_score = 0
+            else:
+                try:
+                    actual_score = int(score_str)
+                except ValueError:
+                    actual_score = 0  # For CUT, WD, DQ, etc.
             penalty = 10 if score_str in ['CUT', 'WD', 'DQ'] else 0
             scores[name] = {
                 'actual': actual_score,
