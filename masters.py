@@ -7,6 +7,9 @@ import unicodedata
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 
+DG_API_KEY = "45323a83fa8d25b3c3d745bd63d9"  # Replace with your DataGolf API key
+
+
 # Initialize Firebase
 if not firebase_admin._apps:
     try:
@@ -105,39 +108,21 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-def get_pga_scores():
-    try:
-        url = "https://site.api.espn.com/apis/site/v2/sports/golf/pga/leaderboard"
-        params = {"tournamentId": "401703509"}
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
-        players = data['leaders'] if 'leaders' in data else data['athletes']
-        scores = {}
-        for player in players:
-            # player['athlete']['displayName'] for full name, player['score'] for score
-            name = player['athlete']['displayName']
-            norm_name = normalize_name(name)
-            score_str = str(player['score']).strip()
-            if score_str == 'E':
-                actual_score = 0
-            elif score_str in ['CUT', 'WD', 'DQ']:
-                actual_score = 0
-            else:
-                try:
-                    actual_score = int(score_str)
-                except ValueError:
-                    actual_score = 0
-            penalty = 10 if score_str in ['CUT', 'WD', 'DQ'] else 0
-            scores[norm_name] = {
-                'actual': actual_score,
-                'penalty': penalty,
-                'display': score_str
-            }
-        return scores
-    except Exception as e:
-        print(f"PGA API Error: {str(e)}")
-        return {}
+@st.cache_data(ttl=300)
+def get_datagolf_field_updates():
+    url = "https://feeds.datagolf.com/field-updates"
+    params = {
+        "tour": "pga",           # or "euro", "kft", etc.
+        "file_format": "json",
+        "key": DG_API_KEY
+    }
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    data = response.json()
+    # The 'field' key contains the player data
+    players = data['field']
+    df = pd.DataFrame(players)
+    return df
 
 
 def display_leaderboard(leaderboard):
@@ -179,12 +164,15 @@ def main():
         st.session_state.teams = {}
 
     try:
-        live_scores = get_pga_scores()
+        field_df = get_datagolf_field_updates()
         if not live_scores:
             raise Exception("No scores received from API")
     except Exception as e:
         st.error(f"Using fallback data: {str(e)}")
         live_scores = {}
+
+    scores = get_scores_from_field_df(field_df)
+    st.dataframe(field_df)
 
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
