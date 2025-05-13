@@ -105,81 +105,44 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-@st.cache_data(ttl=300)
-def get_masters_scores():
-    try:
-        response = requests.get("https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard", timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        
-        missed_cut = {
-            normalize_name("Keegan Bradley"),
-            normalize_name("Russell Henley"),
-            normalize_name("Dustin Johnson"),
-            normalize_name("Chris Kirk"),
-            normalize_name("Bernhard Langer"),
-            normalize_name("Rafael Campos"),
-            normalize_name("Fred Couples"),
-            normalize_name("Tony Finau"),
-            normalize_name("Sergio Garcia"),
-            normalize_name("Justin Hastings"),
-            normalize_name("Joe Highsmith"),
-            normalize_name("Adam Schenk"),
-            normalize_name("Mike Weir"),
-            normalize_name("Billy Horschel"),
-            normalize_name("Brooks Koepka"),
-            normalize_name("Phil Mickelson"),
-            normalize_name("Adam Scott"),
-            normalize_name("Cameron Smith"),
-            normalize_name("Sepp Straka"),
-            normalize_name("Austin Eckroat"),
-            normalize_name("Nicolai Højgaard"),
-            normalize_name("Robert MacIntyre"),
-            normalize_name("Hiroshi Tai"),
-            normalize_name("Jhonattan Vegas"),
-            normalize_name("Kevin Yu"),
-            normalize_name("Christiaan Bezuidenhout"),
-            normalize_name("José María Olazábal"),
-            normalize_name("Cameron Young"),
-            normalize_name("Lucas Glover"),
-            normalize_name("Patton Kizzire"),
-            normalize_name("Taylor Pendrith"),
-            normalize_name("Will Zalatoris"),
-            normalize_name("Evan Beck"),
-            normalize_name("Cameron Davis"),
-            normalize_name("Thomas Detry"),
-            normalize_name("José Luis Ballester"),
-            normalize_name("Laurie Canter"),
-            normalize_name("Matthieu Pavon"),
-            normalize_name("Angel Cabrera"),
-            normalize_name("Noah Kent"),
-            normalize_name("Thriston Lawrence"),
-            normalize_name("Nick Dunlap")
-        }
+# Replace the existing get_masters_scores function with this:
 
+@st.cache_data(ttl=300)
+def get_pga_scores():
+    try:
+        url = "https://www.espn.com/golf/leaderboard/_/tournamentId/401703509"
+        tables = pd.read_html(url)
+        leaderboard = tables[0]  # First table contains the leaderboard
         scores = {}
-        for event in data.get('events', []):
-            for competition in event.get('competitions', []):
-                for player in competition.get('competitors', []):
-                    try:
-                        raw_name = player['athlete']['displayName']
-                        name = normalize_name(raw_name)
-                        
-                        score_str = str(player.get('score', 'E')).strip()
-                        actual_score = int(score_str) if score_str not in ['E', 'CUT'] else 0
-                        
-                        penalty = 10 if name in missed_cut else 0
-                        
-                        scores[name] = {
-                            'actual': actual_score,
-                            'penalty': penalty
-                        }
-                        
-                    except Exception as e:
-                        print(f"Error processing {raw_name}: {str(e)}")
+        
+        for _, row in leaderboard.iterrows():
+            raw_name = row['PLAYER']
+            name = normalize_name(raw_name)
+            score_str = str(row['SCORE']).strip()
+            
+            # Handle different score representations
+            if score_str == 'E':
+                actual_score = 0
+            elif score_str in ['CUT', 'WD', 'DQ']:
+                actual_score = 0
+            else:
+                try:  # Handle numeric scores (e.g., +3, -2)
+                    actual_score = int(score_str)
+                except ValueError:
+                    actual_score = 0
+
+            # Apply 10-stroke penalty for missed cuts/withdrawals
+            penalty = 10 if score_str in ['CUT', 'WD', 'DQ'] else 0
+            
+            scores[name] = {
+                'actual': actual_score,
+                'penalty': penalty
+            }
+        
         return scores
+    
     except Exception as e:
-        print(f"API Error: {str(e)}")
+        print(f"PGA Leaderboard Error: {str(e)}")
         return {}
 
 def display_leaderboard(leaderboard):
