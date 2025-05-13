@@ -112,17 +112,48 @@ def save_teams(user_id, teams):
 def get_datagolf_field_updates():
     url = "https://feeds.datagolf.com/field-updates"
     params = {
-        "tour": "pga",           # or "euro", "kft", etc.
+        "tour": "pga",
         "file_format": "json",
         "key": DG_API_KEY
     }
     response = requests.get(url, params=params)
     response.raise_for_status()
     data = response.json()
-    # The 'field' key contains the player data
     players = data['field']
     df = pd.DataFrame(players)
     return df
+
+def normalize_name(name):
+    import re
+    return re.sub(r'[^a-z]', '', str(name).lower())
+
+def get_scores_from_field_df(field_df):
+    scores = {}
+    for _, row in field_df.iterrows():
+        name = normalize_name(row['player_name'])
+        status = row.get('status', '').lower()
+        score_str = str(row.get('score', 'E')).strip()
+        # Handle different statuses
+        if status in ['wd', 'dq']:
+            actual_score = 0
+            penalty = 10
+        elif status == 'cut':
+            actual_score = 0
+            penalty = 10
+        else:
+            try:
+                actual_score = int(score_str) if score_str not in ['E', ''] else 0
+                penalty = 0
+            except ValueError:
+                actual_score = 0
+                penalty = 0
+        scores[name] = {
+            'actual': actual_score,
+            'penalty': penalty,
+            'display': score_str if score_str else 'E'
+        }
+    return scores
+
 
 
 def display_leaderboard(leaderboard):
@@ -165,11 +196,13 @@ def main():
 
     try:
         field_df = get_datagolf_field_updates()
-        if not live_scores:
-            raise Exception("No scores received from API")
+        live_scores = get_scores_from_field_df(field_df)
+    if not live_scores:
+        raise Exception("No scores received from API")
     except Exception as e:
         st.error(f"Using fallback data: {str(e)}")
         live_scores = {}
+
 
     scores = get_scores_from_field_df(field_df)
     st.dataframe(field_df)
