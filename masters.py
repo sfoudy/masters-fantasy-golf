@@ -194,7 +194,7 @@ def main():
     except:
         st.session_state.teams = {}
 
-        try:
+    try:
         field_df = get_datagolf_field_updates()
         live_scores = get_scores_from_field_df(field_df)
         if not live_scores:
