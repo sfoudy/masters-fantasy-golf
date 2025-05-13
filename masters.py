@@ -182,7 +182,7 @@ def main():
         st.session_state.teams = {}
 
     try:
-        live_scores = get_masters_scores()
+        live_scores = get_pga_scores()
         if not live_scores:
             raise Exception("No scores received from API")
     except Exception as e:
