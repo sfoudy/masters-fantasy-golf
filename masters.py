@@ -108,7 +108,7 @@ def save_teams(user_id, teams):
 @st.cache_data(ttl=300)
 def get_pga_scores():
     try:
-        url = "https://www.espn.com/golf/leaderboard/_/tournamentId=401703509"
+        url = "https://www.espn.com/golf/leaderboard/_/tournamentId/401703509"
         tables = pd.read_html(url)
         leaderboard = tables[0]
         leaderboard.columns = [col.strip() for col in leaderboard.columns]
