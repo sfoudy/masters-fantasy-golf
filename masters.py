@@ -6,10 +6,6 @@ import pandas as pd
 import unicodedata
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-import time
-
 
 # Initialize Firebase
 if not firebase_admin._apps:
@@ -109,32 +105,29 @@ def save_teams(user_id, teams):
         st.error(f"Save failed: {str(e)}")
         return False
 
-# Replace the existing get_masters_scores function with this:
-
 @st.cache_data(ttl=300)
 def get_pga_scores():
     try:
         url = "https://www.espn.com/golf/leaderboard/_/tournamentId/401703509"
-        options = Options()
-        options.headless = True
-        driver = webdriver.Chrome(options=options)
-        driver.get(url)
-        time.sleep(5)  # Wait for JS to render the table
-
-        html = driver.page_source
-        driver.quit()
-
-        tables = pd.read_html(html)
-        if not tables:
-            raise Exception("No tables found on ESPN page.")
-        leaderboard = tables[0]
-        if 'PLAYER' not in leaderboard.columns or 'SCORE' not in leaderboard.columns:
-            raise Exception("Leaderboard table missing required columns.")
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            )
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        # Use StringIO to avoid deprecation warnings
+        from io import StringIO
+        tables = pd.read_html(StringIO(response.text))
+        leaderboard = tables[-1]  # ESPN: last table is the best formatted[3][6]
         scores = {}
         for _, row in leaderboard.iterrows():
-            player = row['PLAYER']
-            name = normalize_name(player)
+            raw_name = row['PLAYER']
+            name = normalize_name(raw_name)
             score_str = str(row['SCORE']).strip()
+            # Handle 'E', 'CUT', 'WD', 'DQ'
             if score_str == 'E':
                 actual_score = 0
             elif score_str in ['CUT', 'WD', 'DQ']:
@@ -147,8 +140,7 @@ def get_pga_scores():
             penalty = 10 if score_str in ['CUT', 'WD', 'DQ'] else 0
             scores[name] = {
                 'actual': actual_score,
-                'penalty': penalty,
-                'display': score_str
+                'penalty': penalty
             }
         return scores
     except Exception as e:
@@ -181,8 +173,9 @@ def display_leaderboard(leaderboard):
             st.dataframe(leaderboard_df)
 
 def main():
+    st.set_page_config(page_title="PGA Championship Fantasy Golf Tracker", layout="wide")
+    st.title("🏌️ PGA Championship Fantasy Golf Tracker")
 
-    st.set_page_config(page_title="Masters Fantasy Golf Tracker", layout="wide")
     st_autorefresh(interval=300000, key="auto_refresh")
     
     user_id = get_user_session()
@@ -228,7 +221,7 @@ def main():
             "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
 
-    st.title("🏌️ Masters Fantasy Golf Tracker")
+    
     st.header("📊 Fantasy Leaderboard")
     display_leaderboard(leaderboard)
 
