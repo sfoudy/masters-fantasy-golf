@@ -6,6 +6,10 @@ import pandas as pd
 import unicodedata
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import time
+
 
 # Initialize Firebase
 if not firebase_admin._apps:
@@ -111,39 +115,46 @@ def save_teams(user_id, teams):
 def get_pga_scores():
     try:
         url = "https://www.espn.com/golf/leaderboard/_/tournamentId/401703509"
-        tables = pd.read_html(url)
-        leaderboard = tables[0]  # First table contains the leaderboard
+        options = Options()
+        options.headless = True
+        driver = webdriver.Chrome(options=options)
+        driver.get(url)
+        time.sleep(5)  # Wait for JS to render the table
+
+        html = driver.page_source
+        driver.quit()
+
+        tables = pd.read_html(html)
+        if not tables:
+            raise Exception("No tables found on ESPN page.")
+        leaderboard = tables[0]
+        if 'PLAYER' not in leaderboard.columns or 'SCORE' not in leaderboard.columns:
+            raise Exception("Leaderboard table missing required columns.")
         scores = {}
-        
         for _, row in leaderboard.iterrows():
-            raw_name = row['PLAYER']
-            name = normalize_name(raw_name)
+            player = row['PLAYER']
+            name = normalize_name(player)
             score_str = str(row['SCORE']).strip()
-            
-            # Handle different score representations
             if score_str == 'E':
                 actual_score = 0
             elif score_str in ['CUT', 'WD', 'DQ']:
                 actual_score = 0
             else:
-                try:  # Handle numeric scores (e.g., +3, -2)
+                try:
                     actual_score = int(score_str)
                 except ValueError:
                     actual_score = 0
-
-            # Apply 10-stroke penalty for missed cuts/withdrawals
             penalty = 10 if score_str in ['CUT', 'WD', 'DQ'] else 0
-            
             scores[name] = {
                 'actual': actual_score,
-                'penalty': penalty
+                'penalty': penalty,
+                'display': score_str
             }
-        
         return scores
-    
     except Exception as e:
         print(f"PGA Leaderboard Error: {str(e)}")
         return {}
+
 
 def display_leaderboard(leaderboard):
     if leaderboard:
@@ -171,16 +182,6 @@ def display_leaderboard(leaderboard):
 
 def main():
 
-
-url = "https://www.espn.com/golf/leaderboard/_/tournamentId/401703509"
-tables = pd.read_html(url)
-print(f"Number of tables found: {len(tables)}")
-if tables:
-    print("Columns:", tables[0].columns)
-    print(tables[0].head())
-else:
-    print("No tables found.")
-    
     st.set_page_config(page_title="Masters Fantasy Golf Tracker", layout="wide")
     st_autorefresh(interval=300000, key="auto_refresh")
     
