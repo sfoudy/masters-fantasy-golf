@@ -200,8 +200,8 @@ def main():
         if not live_scores:
             raise Exception("No scores received from API")
     except Exception as e:
-
-
+        st.error(f"Using fallback data: {str(e)}")
+        live_scores = {}
 
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
@@ -230,7 +230,6 @@ def main():
             "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
         })
 
-    
     st.header("📊 Fantasy Leaderboard")
     display_leaderboard(leaderboard)
 
@@ -274,6 +273,9 @@ def main():
                 original = [t for t in st.session_state.teams if proper_case(t) == del_team][0]
                 del st.session_state.teams[original]
                 save_teams(user_id, st.session_state.teams)
+
+    st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
