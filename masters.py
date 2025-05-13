@@ -202,12 +202,13 @@ def main():
     except Exception as e:
         st.error(f"Using fallback data: {str(e)}")
         live_scores = {}
-        # Build mapping: normalized name -> Proper Case Name
+        field_df = pd.DataFrame()  # Prevent NameError if API fails
+
+    # Build mapping: normalized name -> Proper Case Name
     name_map = {}
     for _, row in field_df.iterrows():
         norm = normalize_name(row['player_name'])
         name_map[norm] = proper_case(row['player_name'])
-
 
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
@@ -240,8 +241,7 @@ def main():
     display_leaderboard(leaderboard)
 
     st.header("🏌️ Assign Golfers to Teams")
-        valid_golfers = {k: v for k, v in live_scores.items()}
-    # Reverse map for display name -> normalized name
+    valid_golfers = {k: v for k, v in live_scores.items()}
     reverse_name_map = {v: k for k, v in name_map.items()}
     
     for team, golfers in st.session_state.teams.items():
@@ -263,7 +263,6 @@ def main():
                     save_teams(user_id, st.session_state.teams)
                 else:
                     st.error("Maximum 4 golfers per team!")
-
 
     with st.sidebar:
         st.header("👥 Manage Teams")
@@ -287,9 +286,3 @@ def main():
                 save_teams(user_id, st.session_state.teams)
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-
-    st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-
-if __name__ == "__main__":
-    main()
