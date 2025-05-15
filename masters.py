@@ -87,8 +87,7 @@ def get_user_session():
             st.stop()
     return st.session_state.user_id
 
-def normalize_name(name: str) -> str:
-    return unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode().lower().strip()
+
 
 def proper_case(name: str) -> str:
     return ' '.join(word.capitalize() for word in name.split())
