@@ -208,6 +208,7 @@ def main():
     # Fetch live model data
     try:
         live_model_data = get_datagolf_live_model()
+        st.write(live_model_data) 
         players = live_model_data["players"]
 
         # Build normalized name -> player data lookup
