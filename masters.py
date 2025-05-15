@@ -23,6 +23,11 @@ if not firebase_admin._apps:
 db = firestore.client()
 FIREBASE_WEB_API_KEY = st.secrets["firebase_auth"]["web_api_key"]
 
+def normalize_name(name: str) -> str:
+    import re
+    return re.sub(r'[^a-z]', '', str(name).lower())
+
+
 def send_password_reset_email(email: str):
     try:
         response = requests.post(
@@ -230,20 +235,22 @@ def main():
                 st.warning("You can select a maximum of 4 golfers.")
 
             if st.form_submit_button("Save Selections", disabled=save_disabled):
-                st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
+    # Store normalized names for consistency
+                st.session_state.teams[team] = [normalize_name(g) for g in selected]
                 save_teams(user_id, st.session_state.teams)
+
 
     # --- Leaderboard Section ---
     leaderboard = []
     for team, golfers in st.session_state.teams.items():
-        valid_golfers_list = [g for g in golfers if normalize_name(g) in live_scores]
+        valid_golfers_list = [g for g in golfers if g in live_scores]
         
         total_score = 0
         total_actual = 0
         formatted_golfers = []
         
         for golfer in valid_golfers_list:
-            data = live_scores[normalize_name(golfer)]
+            data = live_scores[golfer]
             if data['penalty'] > 0:
                 total_score += 10
                 display = f"{proper_case(golfer)} (+10) 🔴 (Actual: {data['actual']:+})"
