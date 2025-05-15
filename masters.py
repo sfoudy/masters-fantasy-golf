@@ -296,12 +296,16 @@ def main():
                 score = pdata.get("current_score", 0)
                 current_pos = pdata.get("current_pos", "")
                 # Apply 10-shot penalty for MC/CUT after round 2
-                if current_round > 2 and current_pos in ["MC", "CUT"]:
+                
+                missed_cut = (current_round > 2 and current_pos in ["MC", "CUT"])
+                mc_indicator = " (MC)" if missed_cut else ""
+                if missed_cut:
                     total_score += 10
-                    formatted_golfers.append(f"{name}: +10 (MC, actual: {score:+})")
+                    formatted_golfers.append(f"{name}{mc_indicator}: +10 (actual: {score:+})")
                 else:
+                    formatted_golfers.append(f"{name}{mc_indicator}: {score:+}")
                     total_score += score
-                    formatted_golfers.append(f"{name}: {score:+}")
+
                 # Always add actual score to no penalty total
                 display_score_no_penalty += score
             else:
