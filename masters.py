@@ -238,59 +238,6 @@ def main():
         name_map[norm] = pdata["player_name"]
     reverse_name_map = {v: k for k, v in name_map.items()}
 
-
-   # --- Leaderboard Section ---
-st.header("📊 Fantasy Leaderboard")
-
-# Manual refresh button
-if st.button("🔄 Refresh Data"):
-    st.cache_data.clear()  # Clear Streamlit's cache to force data refresh
-    st.experimental_rerun()
-
-leaderboard = []
-
-for team, golfers in st.session_state.teams.items():
-    total_score = 0
-    display_score_no_penalty = 0
-    formatted_golfers = []
-
-    for golfer in golfers:
-        norm_name = normalize_name(golfer)
-        if norm_name in live_scores:
-            pdata = live_scores[norm_name]
-            name = pdata["player_name"]
-            score = pdata.get("current_score", 0)
-            # Format score with + for 0 or positive
-            score_str = f"+{score}" if score >= 0 else f"{score}"
-            formatted_golfers.append(f"{name}: {score_str}")
-            total_score += score
-            display_score_no_penalty += score
-        else:
-            formatted_golfers.append(f"{golfer}: No score found")
-
-    leaderboard.append({
-        "Team": team,
-        "Score": total_score,
-        "Display Score (No Penalty)": display_score_no_penalty,
-        "Golfers": ", ".join(formatted_golfers)
-    })
-
-# Create DataFrame and add leaderboard position
-df = pd.DataFrame(leaderboard)
-df = df.sort_values("Score", ascending=True).reset_index(drop=True)
-df.index += 1  # Start positions at 1
-df.insert(0, "Position", df.index)
-
-# Format the Score and Display Score columns with + sign for positive/zero
-def plus_format(x):
-    return f"+{x}" if x >= 0 else f"{x}"
-
-df["Score"] = df["Score"].apply(plus_format)
-df["Display Score (No Penalty)"] = df["Display Score (No Penalty)"].apply(plus_format)
-
-st.dataframe(df, use_container_width=True)
-
-    
     st.header("🏌️ Assign Golfers to Teams")
     valid_golfers = {k: v for k, v in live_scores.items()}
 
@@ -315,7 +262,56 @@ st.dataframe(df, use_container_width=True)
                 st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
                 save_teams(user_id, st.session_state.teams)
 
-    
+    # --- Leaderboard Section ---
+    st.header("📊 Fantasy Leaderboard")
+
+    # Manual refresh button
+    if st.button("🔄 Refresh Data"):
+        st.cache_data.clear()
+        st.experimental_rerun()
+
+    leaderboard = []
+
+    for team, golfers in st.session_state.teams.items():
+        total_score = 0
+        display_score_no_penalty = 0
+        formatted_golfers = []
+
+        for golfer in golfers:
+            norm_name = normalize_name(golfer)
+            if norm_name in live_scores:
+                pdata = live_scores[norm_name]
+                name = pdata["player_name"]
+                score = pdata.get("current_score", 0)
+                # Format score with + for 0 or positive
+                score_str = f"+{score}" if score >= 0 else f"{score}"
+                formatted_golfers.append(f"{name}: {score_str}")
+                total_score += score
+                display_score_no_penalty += score
+            else:
+                formatted_golfers.append(f"{golfer}: No score found")
+
+        leaderboard.append({
+            "Team": team,
+            "Score": total_score,
+            "Display Score (No Penalty)": display_score_no_penalty,
+            "Golfers": ", ".join(formatted_golfers)
+        })
+
+    # Create DataFrame and add leaderboard position
+    df = pd.DataFrame(leaderboard)
+    df = df.sort_values("Score", ascending=True).reset_index(drop=True)
+    df.index += 1  # Start positions at 1
+    df.insert(0, "Position", df.index)
+
+    # Format the Score and Display Score columns with + sign for positive/zero
+    def plus_format(x):
+        return f"+{x}" if x >= 0 else f"{x}"
+
+    df["Score"] = df["Score"].apply(plus_format)
+    df["Display Score (No Penalty)"] = df["Display Score (No Penalty)"].apply(plus_format)
+
+    st.dataframe(df, use_container_width=True)
 
     # --- Sidebar ---
     with st.sidebar:
@@ -340,6 +336,7 @@ st.dataframe(df, use_container_width=True)
                 save_teams(user_id, st.session_state.teams)
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
 
 
 
