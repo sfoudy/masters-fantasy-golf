@@ -117,6 +117,8 @@ def get_datagolf_live_model():
     url = "https://feeds.datagolf.com/preds/in-play"
     params = {
         "tour": "pga",
+        "dead_heat": "no",
+        "odds_format": "percent",
         "file_format": "json",
         "key": DG_API_KEY
     }
@@ -124,6 +126,7 @@ def get_datagolf_live_model():
     response.raise_for_status()
     data = response.json()
     return data
+
 
 
 def normalize_name(name):
