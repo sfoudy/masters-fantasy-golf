@@ -238,29 +238,6 @@ def main():
         name_map[norm] = pdata["player_name"]
     reverse_name_map = {v: k for k, v in name_map.items()}
 
-    st.header("🏌️ Assign Golfers to Teams")
-    valid_golfers = {k: v for k, v in live_scores.items()}
-
-    # Team selection forms
-    for team, golfers in st.session_state.teams.items():
-        with st.form(key=f"{team}_form"):
-            current = [name_map[g] for g in golfers if g in name_map]
-            options = [name_map[g] for g in valid_golfers.keys() if g in name_map]
-            selected = st.multiselect(
-                f"Select golfers for {team} (Max 4):",
-                options=options,
-                default=current,
-                format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['current_score']:+})" if reverse_name_map.get(x) in valid_golfers else x
-            )
-
-            save_disabled = len(selected) > 4
-            if save_disabled:
-                st.warning("You can select a maximum of 4 golfers.")
-
-            if st.form_submit_button("Save Selections", disabled=save_disabled):
-                # Store normalized names for consistency
-                st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
-                save_teams(user_id, st.session_state.teams)
 
     # --- Leaderboard Section ---
     st.header("📊 Fantasy Leaderboard")
@@ -289,6 +266,32 @@ def main():
         })
 
     display_leaderboard(leaderboard)
+    
+    st.header("🏌️ Assign Golfers to Teams")
+    valid_golfers = {k: v for k, v in live_scores.items()}
+
+    # Team selection forms
+    for team, golfers in st.session_state.teams.items():
+        with st.form(key=f"{team}_form"):
+            current = [name_map[g] for g in golfers if g in name_map]
+            options = [name_map[g] for g in valid_golfers.keys() if g in name_map]
+            selected = st.multiselect(
+                f"Select golfers for {team} (Max 4):",
+                options=options,
+                default=current,
+                format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['current_score']:+})" if reverse_name_map.get(x) in valid_golfers else x
+            )
+
+            save_disabled = len(selected) > 4
+            if save_disabled:
+                st.warning("You can select a maximum of 4 golfers.")
+
+            if st.form_submit_button("Save Selections", disabled=save_disabled):
+                # Store normalized names for consistency
+                st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
+                save_teams(user_id, st.session_state.teams)
+
+    
 
     # --- Sidebar ---
     with st.sidebar:
