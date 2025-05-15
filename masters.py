@@ -113,8 +113,8 @@ def save_teams(user_id, teams):
         return False
 
 @st.cache_data(ttl=300)
-def get_datagolf_field_updates():
-    url = "https://feeds.datagolf.com/field-updates"
+def get_datagolf_live_model():
+    url = "https://feeds.datagolf.com/preds/in-play"
     params = {
         "tour": "pga",
         "file_format": "json",
@@ -123,9 +123,8 @@ def get_datagolf_field_updates():
     response = requests.get(url, params=params)
     response.raise_for_status()
     data = response.json()
-    players = data['field']
-    df = pd.DataFrame(players)
-    return df
+    return data
+
 
 def normalize_name(name):
     import re
@@ -199,8 +198,16 @@ def main():
         st.session_state.teams = {}
 
     try:
-        field_df = get_datagolf_field_updates()
-        live_scores = get_scores_from_field_df(field_df)
+        live_model_data = get_datagolf_live_model()
+        players = live_model_data["players"]  # This is a dict of player info
+
+        # This will map normalized names to player data for easy lookup
+        live_scores = {}
+        for player_id, pdata in players.items():
+            name = pdata["display_name"]
+            norm_name = normalize_name(name)
+            live_scores[norm_name] = pdata
+
         if not live_scores:
             raise Exception("No scores received from API")
     except Exception as e:
@@ -241,32 +248,40 @@ def main():
 
     # --- Leaderboard Section ---
     leaderboard = []
-    for team, golfers in st.session_state.teams.items():
-        valid_golfers_list = [g for g in golfers if g in live_scores]
-        
-        total_score = 0
-        total_actual = 0
-        formatted_golfers = []
-        
-        for golfer in valid_golfers_list:
-            data = live_scores[golfer]
-            if data['penalty'] > 0:
-                total_score += 10
-                display = f"{proper_case(golfer)} (+10) 🔴 (Actual: {data['actual']:+})"
-            else:
-                total_score += data['actual']
-                display = f"{name_map.get(golfer, proper_case(golfer))} ({data['actual']:+})"
+    leaderboard = []
 
-            
-            total_actual += data['actual']
-            formatted_golfers.append(display)
-        
-        leaderboard.append({
-            "Team": proper_case(team),
-            "Score": total_score,
-            "Display Score (No Penalty)": total_actual,
-            "Golfers": ", ".join(formatted_golfers) if formatted_golfers else "No valid golfers"
-        })
+for team, golfers in st.session_state.teams.items():
+    total_score = 0
+    formatted_golfers = []
+
+    for golfer in golfers:
+        norm_name = normalize_name(golfer)
+        if norm_name in live_scores:
+            pdata = live_scores[norm_name]
+            name = pdata["display_name"]
+            score = pdata["score"]
+            status = pdata["status"]
+
+            # 10-shot penalty for missed cut
+            if status == "mc":
+                total_score += 10
+                formatted_golfers.append(f"{name}: +10 (MC, actual: {score:+})")
+            else:
+                total_score += score
+                formatted_golfers.append(f"{name}: {score:+}")
+        else:
+            formatted_golfers.append(f"{golfer}: No score found")
+
+    leaderboard.append({
+        "Team": team,
+        "Score": total_score,
+        "Golfers": ", ".join(formatted_golfers)
+    })
+
+import pandas as pd
+df = pd.DataFrame(leaderboard)
+st.dataframe(df)
+
 
     st.header("📊 Fantasy Leaderboard")
     display_leaderboard(leaderboard)
