@@ -256,7 +256,8 @@ def main():
                 display = f"{proper_case(golfer)} (+10) 🔴 (Actual: {data['actual']:+})"
             else:
                 total_score += data['actual']
-                display = f"{proper_case(golfer)} ({data['actual']:+})"
+                display = f"{name_map.get(golfer, proper_case(golfer))} ({data['actual']:+})"
+
             
             total_actual += data['actual']
             formatted_golfers.append(display)
