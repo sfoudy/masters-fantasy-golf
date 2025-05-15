@@ -27,6 +27,16 @@ def normalize_name(name: str) -> str:
     import re
     return re.sub(r'[^a-z]', '', str(name).lower())
 
+def get_text_color(bg_hex):
+    # Convert hex to RGB
+    bg_hex = bg_hex.lstrip('#')
+    r, g, b = tuple(int(bg_hex[i:i+2], 16) for i in (0, 2, 4))
+    # Calculate luminance
+    luminance = (0.299*r + 0.587*g + 0.114*b)/255
+    # If luminance is high, use black text; else use white
+    return 'black' if luminance > 0.5 else 'white'
+
+
 
 def send_password_reset_email(email: str):
     try:
@@ -319,7 +329,10 @@ def main():
 
     def color_score(val):
         rgba = cmap(norm(val))
-        return f"background-color: {mcolors.to_hex(rgba)}"
+        bg_hex = mcolors.to_hex(rgba)
+        text_color = get_text_color(bg_hex)
+        return f"background-color: {bg_hex}; color: {text_color};"
+
 
     # Apply the style to the Score column using Score_numeric for coloring
     styled_df = df.style.apply(
