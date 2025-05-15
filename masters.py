@@ -187,6 +187,8 @@ def display_leaderboard(leaderboard):
             st.dataframe(leaderboard_df)
 
 def main():
+    import matplotlib.colors as mcolors
+
     st.set_page_config(page_title="PGA Championship Fantasy Golf Tracker", layout="wide")
     st.title("🏌️ PGA Championship Fantasy Golf Tracker")
 
@@ -238,14 +240,13 @@ def main():
         name_map[norm] = pdata["player_name"]
     reverse_name_map = {v: k for k, v in name_map.items()}
 
-    # --- Leaderboard Section ---
+    # --- Leaderboard Section (now appears first) ---
     st.header("📊 Fantasy Leaderboard")
 
     # Manual refresh button
     if st.button("🔄 Refresh Data"):
         st.cache_data.clear()
         st.rerun()
-
 
     leaderboard = []
 
@@ -285,16 +286,39 @@ def main():
     def plus_format(x):
         return f"+{x}" if x >= 0 else f"{x}"
 
+    # For coloring, need raw numeric values, so save for style
+    df["Score_numeric"] = df["Score"]
     df["Score"] = df["Score"].apply(plus_format)
     df["Display Score (No Penalty)"] = df["Display Score (No Penalty)"].apply(plus_format)
 
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    # Create a custom diverging colormap from green (-20) to white (0) to dark red (+20)
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "custom_cmap",
+        [(0, "green"), (0.5, "white"), (1, "darkred")]
+    )
+    norm = mcolors.Normalize(vmin=-20, vmax=20)
 
+    def color_score(val):
+        # Use the corresponding numeric value for coloring
+        # val is the formatted string, so get the numeric value from Score_numeric
+        # We'll pass the numeric value directly in the apply function below
+        rgba = cmap(norm(val))
+        return f"background-color: {mcolors.to_hex(rgba)}"
 
+    # Apply the style to the Score column using Score_numeric for coloring
+    styled_df = df.style.apply(
+        lambda s: [color_score(v) for v in df["Score_numeric"]], subset=["Score"]
+    ).format({
+        "Score": lambda x: x,
+        "Display Score (No Penalty)": lambda x: x
+    })
+
+    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+
+    # --- Player Selection Section ---
     st.header("🏌️ Assign Golfers to Teams")
     valid_golfers = {k: v for k, v in live_scores.items()}
 
-    # Team selection forms
     for team, golfers in st.session_state.teams.items():
         with st.form(key=f"{team}_form"):
             current = [name_map[g] for g in golfers if g in name_map]
@@ -314,8 +338,6 @@ def main():
                 # Store normalized names for consistency
                 st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
                 save_teams(user_id, st.session_state.teams)
-
-    
 
     # --- Sidebar ---
     with st.sidebar:
@@ -340,6 +362,7 @@ def main():
                 save_teams(user_id, st.session_state.teams)
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
 
 
 
