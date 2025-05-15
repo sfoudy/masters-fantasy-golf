@@ -288,7 +288,8 @@ def main():
     df["Score"] = df["Score"].apply(plus_format)
     df["Display Score (No Penalty)"] = df["Display Score (No Penalty)"].apply(plus_format)
 
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
 
     st.header("🏌️ Assign Golfers to Teams")
     valid_golfers = {k: v for k, v in live_scores.items()}
