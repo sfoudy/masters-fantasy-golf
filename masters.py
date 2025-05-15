@@ -208,16 +208,21 @@ def main():
     live_scores = {}
     field_df = pd.DataFrame()
 
-    # Fetch live model data
+    # Fetch live model data (free API: use "data" key)
     try:
         live_model_data = get_datagolf_live_model()
-        st.write(live_model_data) 
-        players = live_model_data["players"]
+        players = live_model_data["data"]  # <-- Use this for the free API
 
         # Build normalized name -> player data lookup
-        for player_id, pdata in players.items():
-            name = pdata["display_name"]
-            norm_name = normalize_name(name)
+        live_scores = {}
+        for pdata in players:
+            name = pdata["player_name"]  # e.g., "Scheffler, Scottie"
+            parts = name.split(", ")
+            if len(parts) == 2:
+                full_name = f"{parts[1]} {parts[0]}"
+            else:
+                full_name = name
+            norm_name = normalize_name(full_name)
             live_scores[norm_name] = pdata
 
         if not live_scores:
@@ -226,20 +231,15 @@ def main():
         st.error(f"Using fallback data: {str(e)}")
         # live_scores and field_df are already empty
 
-    # Build mapping: normalized name -> Proper Case Name (if you have field_df)
+    # Build mapping: normalized name -> Proper Case Name
     name_map = {}
-    if not field_df.empty:
-        for _, row in field_df.iterrows():
-            norm = normalize_name(row['player_name'])
-            name_map[norm] = proper_case(row['player_name'])
-    else:
-        # fallback: build name_map from live_scores
-        for norm, pdata in live_scores.items():
-            name_map[norm] = pdata["display_name"]
+    for norm, pdata in live_scores.items():
+        # Use "First Last" for display
+        name_map[norm] = pdata["player_name"]
+    reverse_name_map = {v: k for k, v in name_map.items()}
 
     st.header("🏌️ Assign Golfers to Teams")
     valid_golfers = {k: v for k, v in live_scores.items()}
-    reverse_name_map = {v: k for k, v in name_map.items()}
 
     # Team selection forms
     for team, golfers in st.session_state.teams.items():
@@ -250,7 +250,7 @@ def main():
                 f"Select golfers for {team} (Max 4):",
                 options=options,
                 default=current,
-                format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['score']:+})" if reverse_name_map.get(x) in valid_golfers else x
+                format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['current_score']:+})" if reverse_name_map.get(x) in valid_golfers else x
             )
 
             save_disabled = len(selected) > 4
@@ -274,17 +274,11 @@ def main():
             norm_name = normalize_name(golfer)
             if norm_name in live_scores:
                 pdata = live_scores[norm_name]
-                name = pdata["display_name"]
-                score = pdata["score"]
-                status = pdata["status"]
-
-                # 10-shot penalty for missed cut
-                if status == "mc":
-                    total_score += 10
-                    formatted_golfers.append(f"{name}: +10 (MC, actual: {score:+})")
-                else:
-                    total_score += score
-                    formatted_golfers.append(f"{name}: {score:+}")
+                name = pdata["player_name"]
+                score = pdata["current_score"]
+                # No "status" in free API; can't apply MC penalty
+                formatted_golfers.append(f"{name}: {score:+}")
+                total_score += score
             else:
                 formatted_golfers.append(f"{golfer}: No score found")
 
