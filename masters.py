@@ -244,6 +244,9 @@ def main():
         live_model_data = get_datagolf_live_model()
         players = live_model_data["data"]  # <-- Use this for the free API
 
+        # Get current round from API
+        current_round = live_model_data.get("info", {}).get("current_round", 1)
+
         # Build normalized name -> player data lookup
         live_scores = {}
         for pdata in players:
@@ -260,6 +263,7 @@ def main():
             raise Exception("No scores received from API")
     except Exception as e:
         st.error(f"Using fallback data: {str(e)}")
+        current_round = 1  # fallback
         # live_scores and field_df are already empty
 
     # Build mapping: normalized name -> Proper Case Name
@@ -290,10 +294,15 @@ def main():
                 pdata = live_scores[norm_name]
                 name = pdata["player_name"]
                 score = pdata.get("current_score", 0)
-                # Format score with + for 0 or positive
-                score_str = f"+{score}" if score >= 0 else f"{score}"
-                formatted_golfers.append(f"{name}: {score_str}")
-                total_score += score
+                current_pos = pdata.get("current_pos", "")
+                # Apply 10-shot penalty for MC/CUT after round 2
+                if current_round > 2 and current_pos in ["MC", "CUT"]:
+                    total_score += 10
+                    formatted_golfers.append(f"{name}: +10 (MC, actual: {score:+})")
+                else:
+                    total_score += score
+                    formatted_golfers.append(f"{name}: {score:+}")
+                # Always add actual score to no penalty total
                 display_score_no_penalty += score
             else:
                 formatted_golfers.append(f"{golfer}: No score found")
@@ -332,7 +341,6 @@ def main():
         bg_hex = mcolors.to_hex(rgba)
         text_color = get_text_color(bg_hex)
         return f"background-color: {bg_hex}; color: {text_color};"
-
 
     # Apply the style to the Score column using Score_numeric for coloring
     styled_df = df.style.apply(
@@ -383,7 +391,6 @@ def main():
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
-
         
         new_team = st.text_input("Create New Team:")
         if st.button("Add Team") and new_team.strip():
@@ -398,6 +405,7 @@ def main():
                 save_teams(user_id, st.session_state.teams)
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
 
 
 
