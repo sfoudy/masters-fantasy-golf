@@ -62,6 +62,17 @@ def authenticate_user(email: str, password: str):
 
 def get_user_session():
     if 'user_id' not in st.session_state:
+        # Try to auto-login if credentials/token are stored
+        if 'firebase_id_token' in st.session_state:
+            try:
+                decoded_token = auth.verify_id_token(st.session_state.firebase_id_token)
+                st.session_state.user_id = decoded_token['uid']
+                return st.session_state.user_id
+            except Exception as e:
+                if 'firebase_id_token' in st.session_state:
+                    del st.session_state['firebase_id_token']
+
+        # Show login form if no valid token exists
         with st.container():
             st.header("🔒 Login/Register")
             email = st.text_input("Email")
@@ -75,9 +86,17 @@ def get_user_session():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Sign In") and email and password:
-                    if user_id := authenticate_user(email, password):
-                        st.session_state.user_id = user_id
+                    response = requests.post(
+                        f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_WEB_API_KEY}",
+                        json={"email": email, "password": password, "returnSecureToken": True}
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        st.session_state.user_id = data['localId']
+                        st.session_state.firebase_id_token = data['idToken']
                         st.rerun()
+                    else:
+                        st.error("Invalid email or password.")
             with col2:
                 if st.button("Create Account") and email and password:
                     if len(password) < 8:
@@ -346,11 +365,12 @@ def main():
     with st.sidebar:
         st.header("👥 Manage Teams")
         if st.button("🚪 Log Out"):
-            keys_to_remove = ['user_id', 'teams']
+            keys_to_remove = ['user_id', 'teams', 'firebase_id_token']
             for key in keys_to_remove:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
+
         
         new_team = st.text_input("Create New Team:")
         if st.button("Add Team") and new_team.strip():
