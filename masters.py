@@ -286,7 +286,7 @@ def main():
     def plus_format(x):
         return f"+{x}" if x >= 0 else f"{x}"
 
-    # For coloring, need raw numeric values, so save for style
+    # Save numeric scores for coloring, but don't show this column
     df["Score_numeric"] = df["Score"]
     df["Score"] = df["Score"].apply(plus_format)
     df["Display Score (No Penalty)"] = df["Display Score (No Penalty)"].apply(plus_format)
@@ -299,9 +299,6 @@ def main():
     norm = mcolors.Normalize(vmin=-20, vmax=20)
 
     def color_score(val):
-        # Use the corresponding numeric value for coloring
-        # val is the formatted string, so get the numeric value from Score_numeric
-        # We'll pass the numeric value directly in the apply function below
         rgba = cmap(norm(val))
         return f"background-color: {mcolors.to_hex(rgba)}"
 
@@ -313,7 +310,13 @@ def main():
         "Display Score (No Penalty)": lambda x: x
     })
 
-    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    # Display only the desired columns (hide Score_numeric)
+    st.dataframe(
+        styled_df,
+        use_container_width=True,
+        hide_index=True,
+        column_order=["Position", "Team", "Score", "Display Score (No Penalty)", "Golfers"]
+    )
 
     # --- Player Selection Section ---
     st.header("🏌️ Assign Golfers to Teams")
@@ -362,6 +365,7 @@ def main():
                 save_teams(user_id, st.session_state.teams)
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
 
 
 
