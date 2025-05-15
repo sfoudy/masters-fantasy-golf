@@ -211,7 +211,7 @@ def main():
     st.set_page_config(page_title="PGA Championship Fantasy Golf Tracker", layout="wide")
     st.title("🏌️ PGA Championship Fantasy Golf Tracker")
 
-    st_autorefresh(interval=300000, key="auto_refresh")
+    st_autorefresh(interval=60000, key="auto_refresh")
     
     user_id = get_user_session()
 
