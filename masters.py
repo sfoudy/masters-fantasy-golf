@@ -278,9 +278,9 @@ for team, golfers in st.session_state.teams.items():
         "Golfers": ", ".join(formatted_golfers)
     })
 
-import pandas as pd
-df = pd.DataFrame(leaderboard)
-st.dataframe(df)
+    import pandas as pd
+    df = pd.DataFrame(leaderboard)
+    st.dataframe(df)
 
 
     st.header("📊 Fantasy Leaderboard")
