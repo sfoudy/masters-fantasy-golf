@@ -190,23 +190,27 @@ def main():
     st_autorefresh(interval=300000, key="auto_refresh")
     
     user_id = get_user_session()
-    
-    # Load teams fresh for current user
-    try:
-        st.session_state.teams = load_teams(user_id)
-    except:
+
+    # Ensure teams is initialized in session state
+    if 'teams' not in st.session_state:
         st.session_state.teams = {}
 
+    # Load teams for current user
+    try:
+        st.session_state.teams = load_teams(user_id)
+    except Exception:
+        st.session_state.teams = {}
 
+    # Defensive: always define these
     live_scores = {}
     field_df = pd.DataFrame()
 
+    # Fetch live model data
     try:
         live_model_data = get_datagolf_live_model()
-        players = live_model_data["players"]  # This is a dict of player info
+        players = live_model_data["players"]
 
-        # This will map normalized names to player data for easy lookup
-        live_scores = {}
+        # Build normalized name -> player data lookup
         for player_id, pdata in players.items():
             name = pdata["display_name"]
             norm_name = normalize_name(name)
@@ -216,19 +220,24 @@ def main():
             raise Exception("No scores received from API")
     except Exception as e:
         st.error(f"Using fallback data: {str(e)}")
-        live_scores = {}
-        field_df = pd.DataFrame()  # Prevent NameError if API fails
+        # live_scores and field_df are already empty
 
-    # Build mapping: normalized name -> Proper Case Name
+    # Build mapping: normalized name -> Proper Case Name (if you have field_df)
     name_map = {}
-    for _, row in field_df.iterrows():
-        norm = normalize_name(row['player_name'])
-        name_map[norm] = proper_case(row['player_name'])
+    if not field_df.empty:
+        for _, row in field_df.iterrows():
+            norm = normalize_name(row['player_name'])
+            name_map[norm] = proper_case(row['player_name'])
+    else:
+        # fallback: build name_map from live_scores
+        for norm, pdata in live_scores.items():
+            name_map[norm] = pdata["display_name"]
 
     st.header("🏌️ Assign Golfers to Teams")
     valid_golfers = {k: v for k, v in live_scores.items()}
     reverse_name_map = {v: k for k, v in name_map.items()}
-    
+
+    # Team selection forms
     for team, golfers in st.session_state.teams.items():
         with st.form(key=f"{team}_form"):
             current = [name_map[g] for g in golfers if g in name_map]
@@ -237,7 +246,7 @@ def main():
                 f"Select golfers for {team} (Max 4):",
                 options=options,
                 default=current,
-                format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['actual']:+})"
+                format_func=lambda x: f"{x} ({valid_golfers[reverse_name_map[x]]['score']:+})" if reverse_name_map.get(x) in valid_golfers else x
             )
 
             save_disabled = len(selected) > 4
@@ -245,51 +254,45 @@ def main():
                 st.warning("You can select a maximum of 4 golfers.")
 
             if st.form_submit_button("Save Selections", disabled=save_disabled):
-    # Store normalized names for consistency
-                st.session_state.teams[team] = [normalize_name(g) for g in selected]
+                # Store normalized names for consistency
+                st.session_state.teams[team] = [reverse_name_map[g] for g in selected]
                 save_teams(user_id, st.session_state.teams)
 
-
     # --- Leaderboard Section ---
-    leaderboard = []
-    leaderboard = []
-
-for team, golfers in st.session_state.teams.items():
-    total_score = 0
-    formatted_golfers = []
-
-    for golfer in golfers:
-        norm_name = normalize_name(golfer)
-        if norm_name in live_scores:
-            pdata = live_scores[norm_name]
-            name = pdata["display_name"]
-            score = pdata["score"]
-            status = pdata["status"]
-
-            # 10-shot penalty for missed cut
-            if status == "mc":
-                total_score += 10
-                formatted_golfers.append(f"{name}: +10 (MC, actual: {score:+})")
-            else:
-                total_score += score
-                formatted_golfers.append(f"{name}: {score:+}")
-        else:
-            formatted_golfers.append(f"{golfer}: No score found")
-
-    leaderboard.append({
-        "Team": team,
-        "Score": total_score,
-        "Golfers": ", ".join(formatted_golfers)
-    })
-
-    import pandas as pd
-    df = pd.DataFrame(leaderboard)
-    st.dataframe(df)
-
-
     st.header("📊 Fantasy Leaderboard")
+    leaderboard = []
+
+    for team, golfers in st.session_state.teams.items():
+        total_score = 0
+        formatted_golfers = []
+
+        for golfer in golfers:
+            norm_name = normalize_name(golfer)
+            if norm_name in live_scores:
+                pdata = live_scores[norm_name]
+                name = pdata["display_name"]
+                score = pdata["score"]
+                status = pdata["status"]
+
+                # 10-shot penalty for missed cut
+                if status == "mc":
+                    total_score += 10
+                    formatted_golfers.append(f"{name}: +10 (MC, actual: {score:+})")
+                else:
+                    total_score += score
+                    formatted_golfers.append(f"{name}: {score:+}")
+            else:
+                formatted_golfers.append(f"{golfer}: No score found")
+
+        leaderboard.append({
+            "Team": team,
+            "Score": total_score,
+            "Golfers": ", ".join(formatted_golfers)
+        })
+
     display_leaderboard(leaderboard)
 
+    # --- Sidebar ---
     with st.sidebar:
         st.header("👥 Manage Teams")
         if st.button("🚪 Log Out"):
@@ -312,6 +315,7 @@ for team, golfers in st.session_state.teams.items():
                 save_teams(user_id, st.session_state.teams)
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
 
 
 if __name__ == "__main__":
