@@ -197,6 +197,10 @@ def main():
     except:
         st.session_state.teams = {}
 
+
+    live_scores = {}
+    field_df = pd.DataFrame()
+
     try:
         live_model_data = get_datagolf_live_model()
         players = live_model_data["players"]  # This is a dict of player info
