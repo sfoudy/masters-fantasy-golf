@@ -87,8 +87,9 @@ def get_user_session():
             st.header("🔒 Login/Register")
             # Pre-fill email if previously saved in session_state
             default_email = st.session_state.get('saved_email', '')
-            email = st.text_input("Email", value=default_email)
-            password = st.text_input("Password", type="password")
+            # Use autocomplete attributes for browser autofill
+            email = st.text_input("Email", value=default_email, autocomplete="username")
+            password = st.text_input("Password", type="password", autocomplete="current-password")
             
             with st.expander("Forgot Password?"):
                 reset_email = st.text_input("Enter email to reset password", key="reset_email")
@@ -118,6 +119,7 @@ def get_user_session():
                         st.success("Account created! Please sign in.")
             st.stop()
     return st.session_state.user_id
+
 
 
 
