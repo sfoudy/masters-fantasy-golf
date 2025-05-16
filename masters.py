@@ -270,6 +270,11 @@ def main():
         current_round = 1  # fallback
         # live_scores and field_df are already empty
 
+# After building live_scores, print one player's data to see available fields
+    if live_scores:
+        example_player = next(iter(live_scores.values()))
+        st.write("Example player data:", example_player)
+
     # Build mapping: normalized name -> Proper Case Name
     name_map = {}
     for norm, pdata in live_scores.items():
