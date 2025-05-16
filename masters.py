@@ -85,7 +85,9 @@ def get_user_session():
         # Show login form if no valid token exists
         with st.container():
             st.header("🔒 Login/Register")
-            email = st.text_input("Email")
+            # Pre-fill email if previously saved in session_state
+            default_email = st.session_state.get('saved_email', '')
+            email = st.text_input("Email", value=default_email)
             password = st.text_input("Password", type="password")
             
             with st.expander("Forgot Password?"):
@@ -104,6 +106,7 @@ def get_user_session():
                         data = response.json()
                         st.session_state.user_id = data['localId']
                         st.session_state.firebase_id_token = data['idToken']
+                        st.session_state.saved_email = email  # Save email for autofill
                         st.rerun()
                     else:
                         st.error("Invalid email or password.")
@@ -115,6 +118,7 @@ def get_user_session():
                         st.success("Account created! Please sign in.")
             st.stop()
     return st.session_state.user_id
+
 
 
 
