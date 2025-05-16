@@ -297,7 +297,7 @@ def main():
             if norm_name in live_scores:
                 pdata = live_scores[norm_name]
                 name = pdata["player_name"]
-                score = pdata.get("current_score", 0)
+                score = pdata.get("total_score", 0)
                 current_pos = pdata.get("current_pos", "")
                 # Apply 10-shot penalty for MC/CUT after round 2
                 
