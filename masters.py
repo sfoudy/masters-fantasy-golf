@@ -227,6 +227,15 @@ def main():
     st.set_page_config(page_title="PGA Championship Fantasy Golf Tracker", layout="wide")
     st.title("🏌️ PGA Championship Fantasy Golf Tracker")
 
+    # --- Penalty Selection Widget ---
+    penalty_mode = st.radio(
+        "How should the missed cut penalty be applied?",
+        [
+            "Add 10 to actual score (total score + 10)",
+            "Replace score with 10 (ignore actual score)"
+        ]
+    )
+    
     st_autorefresh(interval=60000, key="auto_refresh")
     
     user_id = get_user_session()
@@ -272,14 +281,7 @@ def main():
         current_round = 1  # fallback
         # live_scores and field_df are already empty
 
-    # --- Penalty Selection Widget ---
-    penalty_mode = st.radio(
-        "How should the missed cut penalty be applied?",
-        [
-            "Add 10 to actual score (total score + 10)",
-            "Replace score with 10 (ignore actual score)"
-        ]
-    )
+    
 
     # Build mapping: normalized name -> Proper Case Name
     name_map = {}
