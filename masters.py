@@ -294,35 +294,35 @@ def main():
 
     leaderboard = []
 
-for team, golfers in st.session_state.teams.items():
-    total_score = 0
-    display_score_no_penalty = 0
-    formatted_golfers = []
+    for team, golfers in st.session_state.teams.items():
+        total_score = 0
+        display_score_no_penalty = 0
+        formatted_golfers = []
 
-    for golfer in golfers:
-        norm_name = normalize_name(golfer)
-        if norm_name in live_scores:
-            pdata = live_scores[norm_name]
-            name = pdata["player_name"]
-            score = pdata.get("current_score", 0)
-            make_cut = pdata.get("make_cut", 1)
-            missed_cut = (current_round > 2 and make_cut == 0)
-            mc_indicator = " (MC)" if missed_cut else ""
-            if missed_cut:
-                total_score += 10
-                formatted_golfers.append(f"{name}{mc_indicator}: +10 (actual: {score:+})")
+        for golfer in golfers:
+            norm_name = normalize_name(golfer)
+            if norm_name in live_scores:
+                pdata = live_scores[norm_name]
+                name = pdata["player_name"]
+                score = pdata.get("current_score", 0)
+                make_cut = pdata.get("make_cut", 1)
+                missed_cut = (current_round > 2 and make_cut == 0)
+                mc_indicator = " (MC)" if missed_cut else ""
+                if missed_cut:
+                    total_score += 10
+                    formatted_golfers.append(f"{name}{mc_indicator}: +10 (actual: {score:+})")
+                else:
+                    formatted_golfers.append(f"{name}: {score:+}")
+                    total_score += score
+                display_score_no_penalty += score
             else:
-                formatted_golfers.append(f"{name}: {score:+}")
-                total_score += score
-            display_score_no_penalty += score
-        else:
-            formatted_golfers.append(f"{golfer}: No score found")
+                formatted_golfers.append(f"{golfer}: No score found")
 
-    leaderboard.append({
-        "Team": team,
-        "Score": total_score,
-        "Display Score (No Penalty)": display_score_no_penalty,
-        "Golfers": ", ".join(formatted_golfers)
+        leaderboard.append({
+            "Team": team,
+            "Score": total_score,
+            "Display Score (No Penalty)": display_score_no_penalty,
+            "Golfers": ", ".join(formatted_golfers)
     })
 
 
