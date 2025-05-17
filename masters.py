@@ -307,20 +307,19 @@ def main():
             if norm_name in live_scores:
                 pdata = live_scores[norm_name]
                 name = pdata["player_name"]
-                score = pdata.get("current_score", 0)   # This is total to-par for the event
-                make_cut = pdata.get("make_cut", 1)     # 0 = missed cut, 1 = made cut
-                player_round = pdata.get("round", 0)    # Number of rounds completed
+                score = pdata.get("current_score", 0)
+                make_cut = pdata.get("make_cut", 1)
+                player_round = pdata.get("round", 0)
                 current_pos = pdata.get("current_pos", "")
 
+            # Penalty logic: apply as soon as player is CUT after round 2
                 missed_cut = (make_cut == 0 and player_round >= 2 and current_pos.upper() == "CUT")
-                mc_indicator = " (MC)" if missed_cut else ""
                 if missed_cut:
-                    penalized_score = score + 10
-                    total_score += penalized_score
-                    formatted_golfers.append(f"{name}{mc_indicator}: {penalized_score:+} (actual: {score:+})")
+                    total_score += score + 10
+                    formatted_golfers.append(f"{name} (MC): +10 (actual: {score:+})")
                 else:
-                    formatted_golfers.append(f"{name}: {score:+}")
                     total_score += score
+                    formatted_golfers.append(f"{name}: {score:+}")
                 display_score_no_penalty += score
             else:
                 formatted_golfers.append(f"{golfer}: No score found")
@@ -331,6 +330,7 @@ def main():
             "Display Score (No Penalty)": display_score_no_penalty,
             "Golfers": ", ".join(formatted_golfers)
         })
+
 
 
 
