@@ -272,10 +272,13 @@ def main():
         current_round = 1  # fallback
         # live_scores and field_df are already empty
 
-# After building live_scores, print one player's data to see available fields
-    if live_scores:
-        example_player = next(iter(live_scores.values()))
-        st.write("Example player data:", example_player)
+# Print Justin Rose's data for debugging
+    for pdata in live_scores.values():
+    # DataGolf API uses "Last, First" for player_name
+        if "rose" in pdata["player_name"].lower():
+            st.write("Justin Rose player data:", pdata)
+            break
+
 
     # Build mapping: normalized name -> Proper Case Name
     name_map = {}
