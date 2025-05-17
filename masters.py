@@ -295,9 +295,9 @@ def main():
     leaderboard = []
 
     for team, golfers in st.session_state.teams.items():
-    total_score = 0
-    display_score_no_penalty = 0
-    formatted_golfers = []
+        total_score = 0
+        display_score_no_penalty = 0
+        formatted_golfers = []
 
     for golfer in golfers:
         norm_name = normalize_name(golfer)
