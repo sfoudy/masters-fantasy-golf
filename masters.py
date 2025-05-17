@@ -292,7 +292,7 @@ def main():
         ],
         key="penalty_mode"   # Explicit key
     )
-    
+
     # --- Leaderboard Section ---
     st.header("📊 Fatasy Leaderboard")
 
