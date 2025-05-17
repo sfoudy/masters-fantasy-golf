@@ -227,14 +227,7 @@ def main():
     st.set_page_config(page_title="PGA Championship Fantasy Golf Tracker", layout="wide")
     st.title("🏌️ PGA Championship Fantasy Golf Tracker")
 
-    # --- Penalty Selection Widget ---
-    penalty_mode = st.radio(
-        "How should the missed cut penalty be applied?",
-        [
-            "Add 10 to actual score (total score + 10)",
-            "Replace score with 10 (ignore actual score)"
-        ]
-    )
+    
     
     st_autorefresh(interval=60000, key="auto_refresh")
     
@@ -290,6 +283,15 @@ def main():
         name_map[norm] = pdata["player_name"]
     reverse_name_map = {v: k for k, v in name_map.items()}
 
+    # --- Penalty Selection Widget ---
+    penalty_mode = st.radio(
+        "How should the missed cut penalty be applied?",
+        [
+            "Add 10 to actual score (total score + 10)",
+            "Replace score with 10 (ignore actual score)"
+        ]
+    )
+    
     # --- Leaderboard Section ---
     st.header("📊 Fantasy Leaderboard")
 
