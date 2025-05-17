@@ -272,13 +272,14 @@ def main():
         current_round = 1  # fallback
         # live_scores and field_df are already empty
 
-# Print Justin Rose's data for debugging
-    #for pdata in live_scores.values():
-    # DataGolf API uses "Last, First" for player_name
-        #if "rose" in pdata["player_name"].lower():
-            #st.write("Justin Rose player data:", pdata)
-            #break
-
+    # --- Penalty Selection Widget ---
+    penalty_mode = st.radio(
+        "How should the missed cut penalty be applied?",
+        [
+            "Add 10 to actual score (total score + 10)",
+            "Replace score with 10 (ignore actual score)"
+        ]
+    )
 
     # Build mapping: normalized name -> Proper Case Name
     name_map = {}
@@ -287,7 +288,7 @@ def main():
         name_map[norm] = pdata["player_name"]
     reverse_name_map = {v: k for k, v in name_map.items()}
 
-    # --- Leaderboard Section (now appears first) ---
+    # --- Leaderboard Section ---
     st.header("📊 Fantasy Leaderboard")
 
     # Manual refresh button
@@ -312,10 +313,14 @@ def main():
                 player_round = pdata.get("round", 0)
                 current_pos = pdata.get("current_pos", "")
 
-            # Penalty logic: apply as soon as player is CUT after round 2
+                # Penalty logic: apply as soon as player is CUT after round 2
                 missed_cut = (make_cut == 0 and player_round >= 2 and current_pos.upper() == "CUT")
                 if missed_cut:
-                    total_score += score + 10
+                    if penalty_mode == "Add 10 to actual score (total score + 10)":
+                        penalized_score = score + 10
+                    else:  # "Replace score with 10 (ignore actual score)"
+                        penalized_score = 10
+                    total_score += penalized_score
                     formatted_golfers.append(f"{name} (MC): +10 (actual: {score:+})")
                 else:
                     total_score += score
@@ -330,12 +335,6 @@ def main():
             "Display Score (No Penalty)": display_score_no_penalty,
             "Golfers": ", ".join(formatted_golfers)
         })
-
-
-
-
-
-
 
     # Create DataFrame and add leaderboard position
     df = pd.DataFrame(leaderboard)
@@ -428,6 +427,7 @@ def main():
                 save_teams(user_id, st.session_state.teams)
 
     st.caption(f"Last update: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
 
 
 
