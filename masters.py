@@ -290,7 +290,7 @@ def main():
             "Add 10 to actual score (total score + 10)",
             "Replace score with 10 (ignore actual score)"
         ],
-        key="penalty_mode"  # Explicit key
+        key="penalty_mode"   # Explicit key
     )
     
     # --- Leaderboard Section ---
