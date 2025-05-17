@@ -286,10 +286,11 @@ def main():
     # --- Penalty Selection Widget ---
     penalty_mode = st.radio(
         "How should the missed cut penalty be applied?",
-        [
+        options=[
             "Add 10 to actual score (total score + 10)",
             "Replace score with 10 (ignore actual score)"
-        ]
+        ],
+        key="penalty_mode"  # Explicit key
     )
     
     # --- Leaderboard Section ---
