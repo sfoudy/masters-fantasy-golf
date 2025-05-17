@@ -285,7 +285,7 @@ def main():
 
 
     # --- Leaderboard Section ---
-    st.header("📊 Fatasy Leaderboard")
+    st.header("📊 Fantasy Leaderboard")
 
     # Manual refresh button
     if st.button("🔄 Refresh Data"):
