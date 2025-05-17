@@ -312,7 +312,6 @@ def main():
                 player_round = pdata.get("round", 0)    # Number of rounds completed
                 current_pos = pdata.get("current_pos", "")
 
-            # Apply penalty as soon as player is CUT after round 2
                 missed_cut = (make_cut == 0 and player_round >= 2 and current_pos.upper() == "CUT")
                 mc_indicator = " (MC)" if missed_cut else ""
                 if missed_cut:
@@ -322,7 +321,7 @@ def main():
                 else:
                     formatted_golfers.append(f"{name}: {score:+}")
                     total_score += score
-
+                display_score_no_penalty += score
             else:
                 formatted_golfers.append(f"{golfer}: No score found")
 
@@ -331,7 +330,8 @@ def main():
             "Score": total_score,
             "Display Score (No Penalty)": display_score_no_penalty,
             "Golfers": ", ".join(formatted_golfers)
-    })
+        })
+
 
 
 
