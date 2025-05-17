@@ -316,12 +316,13 @@ def main():
                 missed_cut = (make_cut == 0 and player_round >= 2 and current_pos.upper() == "CUT")
                 mc_indicator = " (MC)" if missed_cut else ""
                 if missed_cut:
-                    total_score += 10
-                    formatted_golfers.append(f"{name}{mc_indicator}: +10 (actual: {score:+})")
+                    penalized_score = score + 10
+                    total_score += penalized_score
+                    formatted_golfers.append(f"{name}{mc_indicator}: {penalized_score:+} (actual: {score:+})")
                 else:
                     formatted_golfers.append(f"{name}: {score:+}")
                     total_score += score
-                display_score_no_penalty += score
+
             else:
                 formatted_golfers.append(f"{golfer}: No score found")
 
